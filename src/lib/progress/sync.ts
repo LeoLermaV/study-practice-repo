@@ -83,19 +83,36 @@ async function apiPatch(url: string, tok: string, body: unknown): Promise<unknow
 }
 
 async function findExistingGist(tok: string): Promise<string | null> {
+  const matches: { id: string; updatedAt: string }[] = []
   let page = 1
   while (page <= 5) {
     const gists = await apiGet(`https://api.github.com/gists?per_page=100&page=${page}`, tok) as unknown[]
     for (const g of gists) {
       const gist = g as Record<string, unknown>
       if (gist.description === GIST_DESCRIPTION && gist.files && (gist.files as Record<string, unknown>)[GIST_FILENAME]) {
-        return gist.id as string
+        matches.push({ id: gist.id as string, updatedAt: gist.updated_at as string })
       }
     }
     if (gists.length < 100) break
     page++
   }
-  return null
+
+  if (matches.length === 0) return null
+
+  matches.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+
+  for (const match of matches) {
+    try {
+      const gist = await apiGet(`https://api.github.com/gists/${match.id}`, tok) as Record<string, unknown>
+      const files = gist.files as Record<string, { content: string }>
+      const file = files[GIST_FILENAME]
+      if (!file) continue
+      const payload = JSON.parse(file.content) as SyncPayload
+      if (Object.keys(payload.entries).length > 0) return match.id
+    } catch {}
+  }
+
+  return matches[0].id
 }
 
 export async function pullProgress(tok: string): Promise<SyncPayload | null> {
@@ -116,6 +133,10 @@ export async function pullProgress(tok: string): Promise<SyncPayload | null> {
 }
 
 export async function pushProgress(tok: string, payload: SyncPayload): Promise<void> {
+  if (Object.keys(payload.entries).length === 0 && payload.studyLog.length === 0) {
+    throw new Error('Nothing to sync — study some topics first')
+  }
+
   let id = gistId()
   if (id) {
     try {
