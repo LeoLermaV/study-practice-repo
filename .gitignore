@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cached source repos (cloned by npm run ingest)
+.cache/
+
+# generated content (produced by npm run ingest)
+src/content/
+public/search-index.json
+public/topics-graph.json
