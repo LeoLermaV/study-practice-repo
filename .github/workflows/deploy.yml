@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      BASE_PATH: /study-practice-repo
     steps:
       - uses: actions/checkout@v4
 
