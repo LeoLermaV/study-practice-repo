@@ -1,5 +1,6 @@
 import { get, set, del, keys } from 'idb-keyval'
 import type { ProgressEntry, PracticeNote, StudyStats } from '../content/types'
+import { autoPush } from './sync'
 
 const PROGRESS_PREFIX = 'progress:'
 const STUDY_LOG_KEY = 'study-log'
@@ -72,9 +73,9 @@ export async function markRead(slug: string): Promise<ProgressEntry> {
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
+  autoPush()
   return entry
 }
-
 export async function markStudied(slug: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
@@ -90,9 +91,9 @@ export async function markStudied(slug: string): Promise<ProgressEntry> {
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
+  autoPush()
   return entry
 }
-
 export async function markPracticed(slug: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
@@ -108,9 +109,9 @@ export async function markPracticed(slug: string): Promise<ProgressEntry> {
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
+  autoPush()
   return entry
 }
-
 export async function addPracticeNote(slug: string, text: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
@@ -127,9 +128,9 @@ export async function addPracticeNote(slug: string, text: string): Promise<Progr
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
+  autoPush()
   return entry
 }
-
 export async function removePracticeNote(slug: string, timestamp: number): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   if (!existing) throw new Error('No progress entry')

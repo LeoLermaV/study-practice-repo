@@ -210,3 +210,35 @@ export async function importProgress(payload: SyncPayload): Promise<void> {
 
   setLastSync(Date.now())
 }
+
+const AUTO_SYNC_KEY = 'gist-sync-auto'
+
+export function isAutoSync(): boolean {
+  try { return localStorage.getItem(AUTO_SYNC_KEY) === 'true' } catch { return false }
+}
+
+export function setAutoSync(on: boolean) {
+  try { localStorage.setItem(AUTO_SYNC_KEY, String(on)) } catch {}
+}
+
+export async function autoPush() {
+  if (!isAutoSync()) return
+  const t = token()
+  if (!t) return
+  try {
+    const payload = await exportProgress()
+    if (Object.keys(payload.entries).length === 0) return
+    await pushProgress(t, payload)
+  } catch {}
+}
+
+export async function autoPull() {
+  if (!isAutoSync()) return
+  const t = token()
+  if (!t) return
+  try {
+    const payload = await pullProgress(t)
+    if (!payload) return
+    await importProgress(payload)
+  } catch {}
+}

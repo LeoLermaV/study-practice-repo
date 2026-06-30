@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Download, Upload, Trash2, Eye, EyeOff } from 'lucide-react'
-import { getToken, setToken, clearToken, getLastSync, pushProgress, pullProgress, exportProgress, importProgress } from '@/lib/progress/sync'
+import { getToken, setToken, clearToken, getLastSync, pushProgress, pullProgress, exportProgress, importProgress, isAutoSync, setAutoSync } from '@/lib/progress/sync'
 
 export default function SettingsPage() {
   const [token, setTokenState] = useState('')
@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [lastSync, setLastSync] = useState<number | null>(null)
   const [showToken, setShowToken] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [autoSync, setAutoSyncState] = useState(false)
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export default function SettingsPage() {
       setTokenSaved(true)
     }
     setLastSync(getLastSync())
+    setAutoSyncState(isAutoSync())
   }, [])
 
   const flash = useCallback((text: string, ok: boolean) => {
@@ -174,6 +176,25 @@ export default function SettingsPage() {
               {syncing ? 'Syncing...' : 'Pull'}
             </Button>
           </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm">Auto-sync</span>
+            <button
+              onClick={() => {
+                const next = !autoSync
+                setAutoSyncState(next)
+                setAutoSync(next)
+              }}
+              className={`relative h-6 w-10 rounded-full transition-colors ${autoSync ? 'bg-[#0099ff]' : 'bg-[#333]'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${autoSync ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Automatically push after each progress change and pull on app open. Requires a saved token.
+          </p>
 
           <Separator />
 

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { getStudyStats, getAllProgress } from '@/lib/progress/db'
 import type { StudyStats, TopicMeta, Category } from '@/lib/content/types'
 import { buildDailyQueue, type QueueItem } from '@/lib/progress/queue'
+import { autoPull } from '@/lib/progress/sync'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BookOpen, BookText, Code2, Cpu, Users, ArrowRight, TrendingUp, Flame } from 'lucide-react'
@@ -14,9 +15,11 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
   const [queue, setQueue] = useState<QueueItem[]>([])
 
   useEffect(() => {
-    getStudyStats().then(setStats)
-    getAllProgress().then((progress) => {
-      setQueue(buildDailyQueue(topics, progress))
+    autoPull().then(() => {
+      getStudyStats().then(setStats)
+      getAllProgress().then((progress) => {
+        setQueue(buildDailyQueue(topics, progress))
+      })
     })
   }, [topics])
 
