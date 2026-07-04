@@ -110,6 +110,17 @@ export const sectionsByCategory: Record<string, SectionDef[]> = {
       slugs: [],
     },
     {
+      label: 'Advanced Algorithms',
+      description: 'Shortest paths, minimum spanning trees, and classic two-pointer techniques not covered elsewhere.',
+      slugs: [
+        'shortest-paths', 'minimum-spanning-tree', 'fast-slow-pointers', 'kadanes-algorithm',
+        'sliding-window-template',
+        'sliding-window-longest-substring-without-repeating',
+        'sliding-window-longest-repeating-character-replacement',
+        'sliding-window-minimum-window-substring',
+      ],
+    },
+    {
       label: 'Cheatsheets',
       description: 'Quick reference guides with time complexity tables, corner cases, and essential LeetCode questions.',
       slugPrefix: 'cheatsheet-',

@@ -62,6 +62,7 @@ async function main() {
   const { DonnemartinAdapter } = await import('./adapters/donnemartin')
   const { PythonPracticeAdapter } = await import('./adapters/python-practice')
   const { LeetCodeHintsAdapter } = await import('./adapters/leetcode-hints')
+  const { DsaSupplementsAdapter } = await import('./adapters/dsa-supplements')
 
   const adapters: SourceAdapter[] = [
     new KaranAdapter(),
@@ -73,6 +74,7 @@ async function main() {
     new DonnemartinAdapter(),
     new PythonPracticeAdapter(),
     new LeetCodeHintsAdapter(),
+    new DsaSupplementsAdapter(),
   ]
 
   for (const adapter of adapters) {

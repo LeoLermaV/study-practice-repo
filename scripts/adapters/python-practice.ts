@@ -581,6 +581,99 @@ Bitwise operations and simple math tricks can solve problems that seem complex a
 
 `,
   },
+  {
+    slug: 'python-practice-medium-sliding-window',
+    title: 'Sliding Window Toolkit',
+    difficulty: 'intermediate',
+    readingTime: 11,
+    tags: ['python', 'deque', 'two-pointer', 'sliding-window', 'intermediate'],
+    related: ['python-practice-easy-dictionaries-and-counting', 'sliding-window-template'],
+    body: `## Concept Refresh
+
+Sliding window problems live and die on two things: the \`collections.deque\` toolkit for O(1) operations at both ends, and the expand/contract two-pointer idiom. This is the Python-syntax refresher for both — see the "Sliding Window: Reusable Template" DS&A topic for the algorithmic shape.
+
+### collections.deque
+
+A regular \`list\` is O(n) for \`pop(0)\` or \`insert(0, x)\` because everything after index 0 has to shift. \`deque\` (double-ended queue) is O(1) at both ends.
+
+    from collections import deque
+
+    dq = deque()
+    dq.append(x)          # push right — O(1)
+    dq.appendleft(x)       # push left — O(1)
+    dq.pop()               # pop right — O(1)
+    dq.popleft()           # pop left — O(1)
+    dq[0]                  # peek left — O(1)
+    dq[-1]                 # peek right — O(1)
+    len(dq)                # size
+
+You can also cap it: \`deque(maxlen=k)\` automatically drops from the opposite end once it exceeds size k — handy for fixed-size windows where you only care about the last k items.
+
+    last_k = deque(maxlen=k)
+    for x in stream:
+        last_k.append(x)   # oldest item auto-evicted once len > k
+
+### The Expand/Contract Idiom
+
+The two-pointer skeleton almost every sliding window problem shares:
+
+    left = 0
+    for right in range(len(arr)):
+        # expand: fold arr[right] into your running window state
+        window_add(arr[right])
+
+        while window_is_invalid():
+            # contract: shrink from the left until valid again
+            window_remove(arr[left])
+            left += 1
+
+        # window [left, right] is now valid — update your answer here
+        answer = max(answer, right - left + 1)
+
+The critical property that makes this O(n) rather than O(n^2): **\`left\` only ever moves forward**. Across the whole loop, \`left\` advances at most n times total, no matter how many outer iterations of \`right\` there are — so the total work across both pointers is O(n), not O(n) per iteration of \`right\`.
+
+### Monotonic Deque (Sliding Window Maximum)
+
+When you need the max (or min) of the current window, not just a sum or count, a monotonic deque of **indices** does it in O(1) amortized per step:
+
+    from collections import deque
+
+    def max_in_windows(nums, k):
+        dq = deque()   # indices, values strictly decreasing left to right
+        result = []
+
+        for i, num in enumerate(nums):
+            while dq and nums[dq[-1]] <= num:
+                dq.pop()              # these can never be the max again — discard
+            dq.append(i)
+
+            if dq[0] <= i - k:
+                dq.popleft()          # fell out of the window — discard
+
+            if i >= k - 1:
+                result.append(nums[dq[0]])
+
+        return result
+
+### Common Pitfalls
+- Using \`list.pop(0)\` instead of \`deque.popleft()\` — both work, but the list version is O(n), silently making an O(n) algorithm O(n^2).
+- Forgetting a monotonic deque stores **indices**, not values — you need the index to know when an entry has aged out of the window via \`dq[0] <= i - k\`.
+- Using \`if\` instead of \`while\` for contraction on **variable-size** windows — one expansion can require shrinking by more than one element to restore validity. (Fixed-size windows are the exception: \`if\` is correct there, since the window grows by exactly one element per step.)
+- \`deque(maxlen=k)\` silently discards instead of raising — great for "keep last k" bookkeeping, but don't reach for it when you need explicit control over *when* eviction happens (use plain \`deque\` + manual \`popleft()\` instead).
+
+### Practice Problems
+
+#### 3. Longest Substring Without Repeating Characters (Medium)
+**Before you solve:** Track the last-seen index of each character in a dict. When you see a repeat inside the current window, jump \`left\` to \`last_seen[char] + 1\` — no inner \`while\` loop needed since you know exactly where to jump.
+
+#### 424. Longest Repeating Character Replacement (Medium)
+**Before you solve:** Track character counts in the window and the max single-character frequency seen. A window of length \`L\` is valid when \`L - max_freq <= k\`. Contract with a \`while\` when that's violated.
+
+#### 76. Minimum Window Substring (Hard)
+**Before you solve:** Track how many of the target's *distinct* characters are currently satisfied (\`formed\`). Expand until \`formed == required_count\`, then contract with a \`while\` as long as it stays valid, recording the window length on every successful contraction.
+
+`,
+  },
 ]
 
 export class PythonPracticeAdapter implements SourceAdapter {

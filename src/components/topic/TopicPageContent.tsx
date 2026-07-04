@@ -32,6 +32,7 @@ const supplementMap: Record<string, string[]> = {
   'nosql-databases': ['donnemartin-database'],
   'sql-vs-nosql-databases': ['donnemartin-database'],
   'sharding': ['donnemartin-database'],
+  'sliding-window': ['python-practice-medium-sliding-window', 'sliding-window-template'],
 }
 
 interface TopicPageProps {
@@ -125,7 +126,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
                 <span className="text-sm font-medium">Quick Reference</span>
               </div>
               <p className="text-xs text-[#999999] mb-3">
-                Supplementary pros-and-cons summaries with diagrams and further reading.
+                Related references and Python patterns for this topic.
               </p>
               <div className="grid gap-2">
                 {suppTopics.map((t) => (
