@@ -52,15 +52,15 @@ export function MobileNav() {
   const pathname = usePathname()
 
   return (
-    <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-[#262626] bg-[#090909] px-4 h-14">
-      <Link href="/" className="font-semibold text-lg tracking-tight">
+    <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-border/70 bg-background/90 backdrop-blur-md px-4 h-14">
+      <Link href="/" className="font-semibold text-[15px] tracking-tight">
         FAANG Study
       </Link>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger className="inline-flex items-center justify-center rounded-full size-9 hover:bg-[#1c1c1c] transition-colors">
+        <SheetTrigger className="inline-flex items-center justify-center rounded-full size-9 hover:bg-secondary transition-colors">
           <Menu className="h-5 w-5" />
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0 pt-14 bg-[#090909] border-[#262626]">
+        <SheetContent side="left" className="w-64 p-0 pt-14 bg-sidebar border-sidebar-border">
           <nav className="flex flex-col gap-1 p-3">
             {navItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -70,16 +70,16 @@ export function MobileNav() {
                   href={item.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200',
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
                     isActive
-                      ? 'bg-[#1c1c1c] text-white'
-                      : 'text-[#999999] hover:bg-[#1c1c1c] hover:text-white'
+                      ? 'bg-secondary text-foreground'
+                      : 'text-muted-foreground hover:bg-secondary/70 hover:text-foreground'
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
                   <span className="flex-1 truncate">{item.label}</span>
                   {item.count !== undefined && item.count > 0 && (
-                    <span className="text-xs text-[#666]">{item.count}</span>
+                    <span className="text-xs text-ink-faint">{item.count}</span>
                   )}
                 </Link>
               )

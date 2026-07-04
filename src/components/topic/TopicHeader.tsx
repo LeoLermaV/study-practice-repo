@@ -2,13 +2,12 @@
 
 import type { Difficulty } from '@/lib/content/types'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Clock } from 'lucide-react'
 
 const difficultyColors: Record<Difficulty, string> = {
-  beginner: 'text-white bg-[#1c1c1c]',
-  intermediate: 'text-white bg-[#1c1c1c]',
-  advanced: 'text-white bg-[#1c1c1c]',
+  beginner: 'text-emerald-400/90 bg-emerald-400/10',
+  intermediate: 'text-amber-400/90 bg-amber-400/10',
+  advanced: 'text-rose-400/90 bg-rose-400/10',
 }
 
 interface TopicHeaderProps {
@@ -22,27 +21,29 @@ export function TopicHeader({ title, difficulty, estimatedReadingTime, tags }: T
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          <Badge className={difficultyColors[difficulty]} variant="secondary">
+        <h1 className="text-[26px] leading-[1.2] md:text-[32px] md:leading-[1.15] font-semibold tracking-[-0.02em] text-balance">
+          {title}
+        </h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3.5">
+          <Badge className={`capitalize rounded-full ${difficultyColors[difficulty]}`} variant="secondary">
             {difficulty}
           </Badge>
-          <span className="flex items-center gap-1 text-sm text-[#999999]">
-            <Clock className="h-3.5 w-3.5" />
-            {estimatedReadingTime} min
+          <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground tabular-nums">
+            <Clock className="h-3.5 w-3.5 text-ink-faint" />
+            {estimatedReadingTime} min read
           </span>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {tags.map((tag) => (
-          <Badge key={tag} variant="secondary" className="text-xs rounded-full">
-            {tag}
-          </Badge>
-        ))}
-      </div>
-
-      <Separator />
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs rounded-full border-border/70 text-muted-foreground">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

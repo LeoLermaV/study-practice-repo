@@ -39,7 +39,7 @@ export default function RootLayout({
           <div className="flex h-screen">
             <Sidebar />
             <MobileNav />
-            <main className="flex-1 overflow-y-auto p-6 md:p-8 pt-16 md:pt-8 pb-9">
+            <main className="flex-1 overflow-y-auto px-5 py-6 md:px-10 md:py-10 pt-[4.75rem] md:pt-10 pb-16 md:pb-16">
               {children}
             </main>
           </div>

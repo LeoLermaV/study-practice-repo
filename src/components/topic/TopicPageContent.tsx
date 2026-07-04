@@ -10,7 +10,7 @@ import { ProgressToggles } from '@/components/progress/ProgressToggles'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import remarkGfm from 'remark-gfm'
-import { sectionsByCategory } from '@/lib/content/sections'
+import { sectionsByCategory, categoryTitles } from '@/lib/content/sections'
 
 const supplementMap: Record<string, string[]> = {
   'load-balancing': ['donnemartin-load-balancer'],
@@ -58,18 +58,18 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
   const next = currentIdx < orderedSlugs.length - 1 ? { slug: orderedSlugs[currentIdx + 1] } : null
 
   return (
-    <div className="max-w-[680px] mx-auto animate-fade-in">
+    <article className="max-w-[680px] mx-auto animate-fade-in">
       <div className="mb-6">
         <Link
           href={`/${category}`}
-          className="inline-flex items-center gap-1 text-sm text-[#999999] hover:text-[#0099ff] transition-colors duration-200"
+          className="inline-flex min-h-8 items-center gap-1.5 -ml-1 pr-2 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {categoryTitles[category] ?? category}
         </Link>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <header className="mb-8 flex flex-col gap-5">
         <TopicHeader
           title={meta.title}
           difficulty={meta.difficulty}
@@ -77,14 +77,14 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
           tags={meta.tags}
         />
         <ProgressToggles slug={slug} />
-      </div>
+      </header>
 
       {meta.prerequisites.length > 0 && (
-        <div className="mb-6 p-4 bg-[#141414] rounded-xl">
-          <span className="text-sm font-medium">Prerequisites</span>
-          <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="mb-4 rounded-xl border border-border/60 bg-card/60 px-4 py-3.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Prerequisites</span>
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
             {meta.prerequisites.map((p) => (
-              <Badge key={p} variant="secondary" className="text-xs rounded-full hover:bg-[#262626] transition-colors duration-200">
+              <Badge key={p} variant="secondary" className="text-xs rounded-full capitalize hover:bg-accent transition-colors duration-200">
                 <Link href={`/${category}/${p}`}>{p.replace(/-/g, ' ')}</Link>
               </Badge>
             ))}
@@ -93,11 +93,11 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
       )}
 
       {meta.relatedTopics.length > 0 && (
-        <div className="mb-6 p-4 bg-[#141414] rounded-xl">
-          <span className="text-sm font-medium">Related</span>
-          <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="mb-4 rounded-xl border border-border/60 bg-card/60 px-4 py-3.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Related</span>
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
             {meta.relatedTopics.map((r) => (
-              <Badge key={r} variant="outline" className="text-xs rounded-full hover:bg-[#1c1c1c] transition-colors duration-200">
+              <Badge key={r} variant="outline" className="text-xs rounded-full capitalize hover:bg-secondary transition-colors duration-200">
                 <Link href={`/${category}/${r}`}>{r.replace(/-/g, ' ')}</Link>
               </Badge>
             ))}
@@ -105,7 +105,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
         </div>
       )}
 
-      <Separator className="mb-8" />
+      <Separator className="mt-8 mb-10 bg-border/60" />
 
       <div className="topic-content max-w-none">
         <MDXBody slug={slug} source={body} />
@@ -120,23 +120,23 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
             .filter((t): t is TopicMeta & { slug: string } => t !== null)
           if (suppTopics.length === 0) return null
           return (
-            <div className="mt-8 p-5 rounded-xl bg-[#141414] border border-[#262626]">
-              <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="h-4 w-4 text-[#0099ff]" />
-                <span className="text-sm font-medium">Quick Reference</span>
+            <div className="mt-10 p-5 rounded-xl bg-card/60 border border-border/60">
+              <div className="flex items-center gap-2 mb-1.5">
+                <BookOpen className="h-4 w-4 text-brand" />
+                <span className="text-sm font-semibold">Quick Reference</span>
               </div>
-              <p className="text-xs text-[#999999] mb-3">
+              <p className="text-[13px] text-muted-foreground mb-3">
                 Related references and Python patterns for this topic.
               </p>
-              <div className="grid gap-2">
+              <div className="grid gap-1">
                 {suppTopics.map((t) => (
                   <Link
                     key={t.slug}
                     href={`/${category}/${t.slug}`}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-[#1c1c1c] transition-colors duration-200"
+                    className="flex min-h-11 items-center justify-between gap-3 -mx-2 px-3 py-2.5 rounded-lg hover:bg-secondary/70 transition-colors duration-200"
                   >
                     <span className="text-sm font-medium">{t.title}</span>
-                    <span className="text-xs text-[#999999]">{t.estimatedReadingTime} min</span>
+                    <span className="text-xs text-ink-faint tabular-nums shrink-0">{t.estimatedReadingTime} min</span>
                   </Link>
                 ))}
               </div>
@@ -145,29 +145,39 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
         })()
       )}
 
-      <Separator className="my-8" />
+      <Separator className="my-10 bg-border/60" />
 
-      <div className="flex items-center justify-between">
+      <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2">
         {prev ? (
           <Link
             href={`/${category}/${prev.slug}`}
-            className="inline-flex items-center gap-1 text-sm text-[#999999] hover:text-[#0099ff] transition-colors duration-200"
+            className="group flex flex-col gap-1 rounded-xl border border-border/60 bg-card/60 p-4 hover:bg-card hover:border-border transition-colors duration-200"
           >
-            <ChevronLeft className="h-4 w-4" />
-            {prev.slug.replace(/-/g, ' ')}
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+              <ChevronLeft className="h-3 w-3" />
+              Previous
+            </span>
+            <span className="text-sm font-medium capitalize text-muted-foreground group-hover:text-foreground transition-colors duration-200">
+              {prev.slug.replace(/-/g, ' ')}
+            </span>
           </Link>
-        ) : <div />}
+        ) : <div className="hidden sm:block" />}
         {next ? (
           <Link
             href={`/${category}/${next.slug}`}
-            className="inline-flex items-center gap-1 text-sm text-[#999999] hover:text-[#0099ff] transition-colors duration-200"
+            className="group flex flex-col gap-1 items-end text-right rounded-xl border border-border/60 bg-card/60 p-4 hover:bg-card hover:border-border transition-colors duration-200"
           >
-            {next.slug.replace(/-/g, ' ')}
-            <ChevronRight className="h-4 w-4" />
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+              Next
+              <ChevronRight className="h-3 w-3" />
+            </span>
+            <span className="text-sm font-medium capitalize text-muted-foreground group-hover:text-foreground transition-colors duration-200">
+              {next.slug.replace(/-/g, ' ')}
+            </span>
           </Link>
-        ) : <div />}
-      </div>
-    </div>
+        ) : <div className="hidden sm:block" />}
+      </nav>
+    </article>
   )
 }
 

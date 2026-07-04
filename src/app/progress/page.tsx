@@ -117,7 +117,7 @@ export default function ProgressPage() {
           <div className="flex gap-1">
             <div className="flex flex-col gap-1 pt-2">
               {dayNames.map((d) => (
-                <span key={d} className="text-[10px] text-[#555] h-3 leading-3">{d}</span>
+                <span key={d} className="text-[10px] text-ink-faint h-3 leading-3">{d}</span>
               ))}
             </div>
             <div className="flex gap-0.5 flex-wrap">
@@ -125,19 +125,19 @@ export default function ProgressPage() {
                 <div
                   key={i}
                   className={`w-3 h-3 rounded-sm transition-colors ${
-                    cell.count > 0 ? 'bg-[#0099ff]/60' : 'bg-[#1c1c1c]'
+                    cell.count > 0 ? 'bg-brand/60' : 'bg-secondary'
                   }`}
                   title={cell.date}
                 />
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-[#555]">
+          <div className="flex items-center gap-2 mt-2 text-[10px] text-ink-faint">
             <span>Less</span>
-            <div className="w-3 h-3 rounded-sm bg-[#1c1c1c]" />
-            <div className="w-3 h-3 rounded-sm bg-[#0099ff]/30" />
-            <div className="w-3 h-3 rounded-sm bg-[#0099ff]/60" />
-            <div className="w-3 h-3 rounded-sm bg-[#0099ff]" />
+            <div className="w-3 h-3 rounded-sm bg-secondary" />
+            <div className="w-3 h-3 rounded-sm bg-brand/30" />
+            <div className="w-3 h-3 rounded-sm bg-brand/60" />
+            <div className="w-3 h-3 rounded-sm bg-brand" />
             <span>More</span>
           </div>
         </CardContent>
@@ -159,14 +159,14 @@ export default function ProgressPage() {
               <div key={cat}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium">{catNames[cat] ?? cat}</span>
-                  <span className="text-xs text-[#666]">{d.practiced}/{d.total}</span>
+                  <span className="text-xs text-ink-faint">{d.practiced}/{d.total}</span>
                 </div>
-                <div className="flex h-2 rounded-full overflow-hidden bg-[#1c1c1c]">
-                  <div className="bg-[#0099ff] transition-all" style={{ width: `${readPct}%` }} />
+                <div className="flex h-2 rounded-full overflow-hidden bg-secondary">
+                  <div className="bg-brand transition-all" style={{ width: `${readPct}%` }} />
                   <div className="bg-amber-500 transition-all" style={{ width: `${Math.max(0, studiedPct - readPct)}%` }} />
                   <div className="bg-emerald-500 transition-all" style={{ width: `${Math.max(0, practicedPct - studiedPct)}%` }} />
                 </div>
-                <div className="flex gap-3 mt-1 text-[10px] text-[#666]">
+                <div className="flex gap-3 mt-1 text-[10px] text-ink-faint">
                   <span>Read: {d.read}</span>
                   <span>Studied: {d.studied}</span>
                   <span>Practiced: {d.practiced}</span>
@@ -188,16 +188,16 @@ export default function ProgressPage() {
               const label = day === 0 ? 'Today' : day === 1 ? 'Tom.' : day >= 6 ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day] : `${day}d`
               return (
                 <div key={day} className="flex flex-col items-center gap-1 flex-1">
-                  <span className="text-xs font-bold text-[#999999]">{count}</span>
-                  <div className={`w-full h-16 rounded-md ${count > 0 ? 'bg-[#1c1c1c]' : 'bg-[#141414]'} flex items-end`}>
+                  <span className="text-xs font-bold text-muted-foreground">{count}</span>
+                  <div className={`w-full h-16 rounded-md ${count > 0 ? 'bg-secondary' : 'bg-card'} flex items-end`}>
                     {count > 0 && (
                       <div
-                        className="w-full bg-[#0099ff]/40 rounded-md transition-all"
+                        className="w-full bg-brand/40 rounded-md transition-all"
                         style={{ height: `${Math.min(100, count * 25)}%` }}
                       />
                     )}
                   </div>
-                  <span className="text-[10px] text-[#555]">{label}</span>
+                  <span className="text-[10px] text-ink-faint">{label}</span>
                 </div>
               )
             })}
@@ -216,10 +216,10 @@ export default function ProgressPage() {
                 <Link
                   key={slug}
                   href={`/${slugToCategory(slug)}/${slug}`}
-                  className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-[#1c1c1c] transition-colors duration-200"
+                  className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-secondary transition-colors duration-200"
                 >
                   <span className="font-medium truncate">{slug.replace(/-/g, ' ')}</span>
-                  <span className="text-xs text-[#666] shrink-0 ml-3">
+                  <span className="text-xs text-ink-faint shrink-0 ml-3">
                     {formatTimeAgo(lastTouched)}
                   </span>
                 </Link>

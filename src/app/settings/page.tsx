@@ -120,7 +120,7 @@ export default function SettingsPage() {
               href="https://github.com/settings/tokens/new?scopes=gist&description=FAANG%20Study"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#0099ff] underline underline-offset-2 hover:opacity-80"
+              className="text-brand underline underline-offset-2 hover:opacity-80"
             >
               token with gist scope
             </a>
@@ -134,11 +134,11 @@ export default function SettingsPage() {
                 value={token}
                 onChange={(e) => setTokenState(e.target.value)}
                 placeholder="ghp_..."
-                className="w-full bg-[#1c1c1c] border border-[#262626] rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#555] outline-none focus:border-[#0099ff] pr-10"
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-ink-faint outline-none focus:border-brand pr-10"
               />
               <button
                 onClick={() => setShowToken(!showToken)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#666] hover:text-white transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-foreground transition-colors"
               >
                 {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -148,7 +148,7 @@ export default function SettingsPage() {
                 Save
               </Button>
             ) : (
-              <Button variant="ghost" size="icon-sm" onClick={handleClearToken} className="shrink-0 text-[#666]" title="Remove token">
+              <Button variant="ghost" size="icon-sm" onClick={handleClearToken} className="shrink-0 text-ink-faint" title="Remove token">
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
@@ -187,7 +187,7 @@ export default function SettingsPage() {
                 setAutoSyncState(next)
                 setAutoSync(next)
               }}
-              className={`relative h-6 w-10 rounded-full transition-colors ${autoSync ? 'bg-[#0099ff]' : 'bg-[#333]'}`}
+              className={`relative h-6 w-10 rounded-full transition-colors ${autoSync ? 'bg-brand' : 'bg-accent'}`}
             >
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${autoSync ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
             </button>

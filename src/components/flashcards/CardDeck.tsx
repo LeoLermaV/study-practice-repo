@@ -94,26 +94,26 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
     return (
       <div className="flex flex-col items-center justify-center py-10 animate-fade-in">
         <h2 className="text-2xl font-bold tracking-tight mb-2">Session Complete</h2>
-        <p className="text-[#999999] text-sm mb-8">
+        <p className="text-muted-foreground text-sm mb-8">
           {queue.length} cards in {mins}m {secs.toString().padStart(2, '0')}s
         </p>
 
         <div className="flex gap-4 mb-8">
           <div className="flex flex-col items-center gap-1">
             <span className="text-sm font-bold text-red-500">{agains}</span>
-            <span className="text-[10px] text-[#666] uppercase">Again</span>
+            <span className="text-[10px] text-ink-faint uppercase">Again</span>
           </div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-sm font-bold text-yellow-500">{hards}</span>
-            <span className="text-[10px] text-[#666] uppercase">Hard</span>
+            <span className="text-[10px] text-ink-faint uppercase">Hard</span>
           </div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-sm font-bold text-green-500">{goods}</span>
-            <span className="text-[10px] text-[#666] uppercase">Good</span>
+            <span className="text-[10px] text-ink-faint uppercase">Good</span>
           </div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-sm font-bold text-emerald-500">{easys}</span>
-            <span className="text-[10px] text-[#666] uppercase">Easy</span>
+            <span className="text-[10px] text-ink-faint uppercase">Easy</span>
           </div>
         </div>
 
@@ -134,9 +134,9 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
   if (queue.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 animate-fade-in">
-        <BookOpen className="h-12 w-12 text-[#333] mb-4" />
+        <BookOpen className="h-12 w-12 text-ink-faint/60 mb-4" />
         <h2 className="text-lg font-semibold mb-1">No cards available</h2>
-        <p className="text-sm text-[#999999] mb-6">Study some topics first to build your flashcard queue.</p>
+        <p className="text-sm text-muted-foreground mb-6">Study some topics first to build your flashcard queue.</p>
         <Link href={`/${category}`}>
           <Button variant="secondary">
             Browse {categoryNames[category] ?? category}
@@ -161,16 +161,16 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
         >
           {/* Front */}
           <div
-            className="absolute inset-0 rounded-2xl bg-[#141414] border border-[#262626] flex flex-col items-center justify-center p-8"
+            className="absolute inset-0 rounded-2xl bg-card border border-border flex flex-col items-center justify-center p-8"
             style={{ backfaceVisibility: 'hidden' }}
           >
             <h2 className="text-xl font-semibold text-center leading-snug">{item.topic.title}</h2>
-            <p className="text-xs text-[#666] mt-6">Tap or press space to reveal</p>
+            <p className="text-xs text-ink-faint mt-6">Tap or press space to reveal</p>
           </div>
 
           {/* Back */}
           <div
-            className="absolute inset-0 rounded-2xl bg-[#141414] border border-[#262626] flex flex-col p-8"
+            className="absolute inset-0 rounded-2xl bg-card border border-border flex flex-col p-8"
             style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
           >
             <div className="flex flex-wrap gap-1.5 mb-3">
@@ -179,7 +179,7 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
               ))}
             </div>
 
-            <div className="flex items-center gap-3 mb-4 text-xs text-[#999999]">
+            <div className="flex items-center gap-3 mb-4 text-xs text-muted-foreground">
               <span className={`capitalize ${
                 item.topic.difficulty === 'beginner' ? 'text-green-500' :
                 item.topic.difficulty === 'intermediate' ? 'text-yellow-500' : 'text-red-500'
@@ -191,14 +191,14 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
 
             <Link
               href={`/${category}/${item.topic.slug}`}
-              className="inline-flex items-center gap-1 text-xs text-[#0099ff] hover:underline mb-6"
+              className="inline-flex items-center gap-1 text-xs text-brand hover:underline mb-6"
               target="_blank"
             >
               Open full topic <ExternalLink className="h-3 w-3" />
             </Link>
 
             <div className="mt-auto">
-              <p className="text-xs text-[#666] mb-2">How well did you know this?</p>
+              <p className="text-xs text-ink-faint mb-2">How well did you know this?</p>
               <div className="grid grid-cols-4 gap-2">
                 {(['again', 'hard', 'good', 'easy'] as const).map((ease, i) => (
                   <button
@@ -224,14 +224,14 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
       </div>
 
       {/* Progress bar */}
-      <div className="flex items-center gap-2 text-xs text-[#666]">
+      <div className="flex items-center gap-2 text-xs text-ink-faint">
         <span>Card {current + 1} of {queue.length}</span>
         <div className="flex gap-0.5">
           {queue.map((_, i) => (
             <div
               key={i}
               className={`h-1 w-4 rounded-full transition-colors ${
-                i <= current ? 'bg-[#0099ff]' : 'bg-[#262626]'
+                i <= current ? 'bg-brand' : 'bg-border'
               }`}
             />
           ))}

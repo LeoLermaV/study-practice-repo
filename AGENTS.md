@@ -208,36 +208,49 @@ Fixed `bottom-0`, 36px, semi-transparent blur, across all pages.
 - `pomodoro-state` — current timer state
 - `pomodoro-config` — user preferences
 
-## Design system (inherited from Framer DESIGN.md)
+## Design system ("Refined dark study" — see DESIGN.md)
+
+Dark-only. Graphite ramp (never pure black), softened ink (never pure white),
+one accent (#0099ff). Components must use semantic tokens — never hardcode hex.
 
 ### Colors (dark only — no light mode)
 ```
---background: #090909        // canvas (near-black)
---card: #141414              // surface-1
---muted: #1c1c1c             // surface-2
---foreground: #ffffff        // ink
---muted-foreground: #999999  // ink-muted
---border: #262626            // hairline
---ring: rgba(0,153,255,0.3)  // accent blue
---sidebar: #090909
---sidebar-border: #262626
---sidebar-accent: #1c1c1c
---sidebar-primary: #0099ff
+--background: #0e0f13        // canvas (graphite, faint cool cast)
+--card: #15171c              // surface-1 (cards, inputs)
+--secondary/--muted: #1d2026 // surface-2 (hover fills, badges)
+--accent: #23262e            // surface-3 (pressed/active)
+--sidebar: #0b0c0f           // shell (sidebar, pomodoro bar) — below canvas
+--foreground: #e7e9ee        // ink (headings, UI)
+--reading-foreground: #cdd1d9 // long-form body ink (.topic-content)
+--muted-foreground: #9aa1ad  // ink-muted
+--ink-faint: #646b78         // meta, eyebrows, counts (text-ink-faint)
+--border: #262a32            // hairline (cards use border-border/60)
+--brand: #0099ff             // links, focus, progress (text-brand, bg-brand/10)
+--brand-soft: #58b6ff        // links inside .topic-content
+--chart-1..5                 // #0099ff #8b84f5 #c77df0 #eb9a5f #ef7189 (category hues)
 ```
 
-### Animations
-- `.animate-fade-in` — 300ms ease-out fade + slide
-- `.animate-scale-in` — 200ms ease-out scale
-- `.hover-lift` — translateY(-2px) + shadow on hover
-- `.spotlight-violet` / `.spotlight-magenta` — gradient backgrounds
-- Button `active:scale-[0.97]` press effect
+### Surfaces & depth
+- All Cards: hairline `border-border/60` + inset top-light, `rounded-xl` (14px)
+- Category identity: `.tint-blue/violet/magenta/orange/coral` — faint radial
+  wash of the category hue over `--card` (replaced old gradient spotlights;
+  `.spotlight-*` names still alias to the calm washes)
+- List-row hover: `hover:bg-secondary/50 hover:border-border` (no translate)
 
 ### Typography
 ```css
-body { font-size: 16px; line-height: 1.55; letter-spacing: 0; }
-h1 { letter-spacing: -0.3px; }
-h2 { letter-spacing: -0.15px; }
+body { font-size: 16px; line-height: 1.6; font-feature-settings: "cv05","cv11"; }
+/* page titles: 26-28px / 600 / -0.02em; section heads 17px / 600 / -0.01em */
+/* eyebrows: 11px / 600 / uppercase / +0.08-0.1em / text-ink-faint */
+/* .topic-content (MDX reading): 17px / 1.75, 680px measure, tables scroll
+   in place (display:block; overflow-x:auto), code blocks #101216 @ 13px */
 ```
+
+### Animations
+- `.animate-fade-in` — 350ms ease-out fade + slide
+- `.animate-scale-in` — 180ms ease-out scale
+- `.hover-lift` — translateY(-1px) + soft shadow (category cards only)
+- Button `active:scale-[0.97]` press effect
 
 ## Framework gotchas
 

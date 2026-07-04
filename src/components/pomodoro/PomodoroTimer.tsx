@@ -252,65 +252,65 @@ export const PomodoroTimer: FC = () => {
   const pct = s.duration > 0 ? (1 - remaining(s) / s.duration) : 0
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center gap-3 h-9 px-4 text-xs border-t border-[#262626] bg-[#090909]/95">
+    <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center gap-3 h-10 px-4 text-xs border-t border-sidebar-border bg-sidebar/90 backdrop-blur-md">
       <div className="flex items-center gap-1.5 shrink-0">
         <span className="inline-block w-2 h-2 rounded-full"
-          style={{ backgroundColor: isWork ? '#0099ff' : '#10b981' }}
+          style={{ backgroundColor: isWork ? 'var(--brand)' : '#34d399' }}
         />
-        <span className="text-[#999999] font-medium">{isWork ? 'Work' : 'Break'}</span>
+        <span className="text-muted-foreground font-medium">{isWork ? 'Work' : 'Break'}</span>
       </div>
 
-      <div className="flex-1 h-1 rounded-full bg-[#1c1c1c] max-w-[200px] hidden md:block">
+      <div className="flex-1 h-1 rounded-full bg-secondary max-w-[200px] hidden md:block">
         <div
           className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${Math.min(100, pct * 100)}%`, backgroundColor: isWork ? '#0099ff' : '#10b981' }}
+          style={{ width: `${Math.min(100, pct * 100)}%`, backgroundColor: isWork ? 'var(--brand)' : '#34d399' }}
         />
       </div>
 
       <span className={`font-mono text-sm font-medium tabular-nums tracking-tight ${
-        s.paused && s.startTime > 0 ? 'text-[#666]' : isWork ? 'text-white' : 'text-emerald-400'
+        s.paused && s.startTime > 0 ? 'text-ink-faint' : isWork ? 'text-foreground' : 'text-emerald-400'
       }`}>
         {display}
       </span>
 
       {s.startTime > 0 && (
-        <span className="text-[#555] hidden sm:inline">Cycle {Math.min(s.cycle + 1, 4)}/4</span>
+        <span className="text-ink-faint hidden sm:inline">Cycle {Math.min(s.cycle + 1, 4)}/4</span>
       )}
 
       <div className="flex items-center gap-0.5 ml-auto">
         {s.startTime === 0 ? (
-          <button onClick={start} className="flex items-center gap-1 rounded px-2 py-1 text-[#999999] hover:text-white hover:bg-[#1c1c1c] transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
+          <button onClick={start} className="flex min-h-8 items-center gap-1 rounded-md px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
             <Play className="h-3 w-3" /><span className="hidden sm:inline">Start</span>
           </button>
         ) : s.paused ? (
-          <button onClick={start} className="flex items-center gap-1 rounded px-2 py-1 text-[#999999] hover:text-white hover:bg-[#1c1c1c] transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
+          <button onClick={start} className="flex min-h-8 items-center gap-1 rounded-md px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
             <Play className="h-3 w-3" /><span className="hidden sm:inline">Resume</span>
           </button>
         ) : (
-          <button onClick={pause} className="flex items-center gap-1 rounded px-2 py-1 text-[#999999] hover:text-white hover:bg-[#1c1c1c] transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
+          <button onClick={pause} className="flex min-h-8 items-center gap-1 rounded-md px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
             <Pause className="h-3 w-3" /><span className="hidden sm:inline">Pause</span>
           </button>
         )}
 
-        <button onClick={skip} className="rounded p-1.5 text-[#555] hover:text-white hover:bg-[#1c1c1c] transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Skip">
+        <button onClick={skip} className="flex size-8 items-center justify-center rounded-md text-ink-faint hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Skip">
           <SkipForward className="h-3 w-3" />
         </button>
-        <button onClick={reset} className="rounded p-1.5 text-[#555] hover:text-white hover:bg-[#1c1c1c] transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Reset">
+        <button onClick={reset} className="flex size-8 items-center justify-center rounded-md text-ink-faint hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Reset">
           <RotateCcw className="h-3 w-3" />
         </button>
 
         <div className="relative" ref={configRef}>
-          <button onClick={() => setShowConfig(!showConfig)} className="rounded p-1.5 text-[#555] hover:text-white hover:bg-[#1c1c1c] transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Settings">
+          <button onClick={() => setShowConfig(!showConfig)} className="flex size-8 items-center justify-center rounded-md text-ink-faint hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Settings">
             <Settings className="h-3 w-3" />
           </button>
 
           {showConfig && (
-            <div className="absolute bottom-8 right-0 w-48 rounded-xl bg-[#141414] border border-[#262626] p-4 shadow-xl animate-scale-in">
-              <p className="text-xs font-medium mb-3 text-[#999999]">Timer Settings</p>
+            <div className="absolute bottom-10 right-0 w-52 rounded-xl bg-popover border border-border p-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] animate-scale-in">
+              <p className="text-xs font-medium mb-3 text-muted-foreground">Timer Settings</p>
               <div className="space-y-2">
                 {(['work', 'shortBreak', 'longBreak'] as const).map((key) => (
                   <div key={key} className="flex items-center justify-between gap-2">
-                    <label className="text-xs text-[#999999] capitalize">
+                    <label className="text-xs text-muted-foreground capitalize">
                       {key === 'shortBreak' ? 'Short Break' : key === 'longBreak' ? 'Long Break' : 'Work'}
                     </label>
                     <input
@@ -319,9 +319,9 @@ export const PomodoroTimer: FC = () => {
                       max={120}
                       value={cfg[key]}
                       onChange={(e) => handleConfigChange(key, parseInt(e.target.value) || 1)}
-                      className="w-16 rounded-md bg-[#1c1c1c] border border-[#262626] px-2 py-1 text-xs text-white text-center tabular-nums outline-none focus:border-[#0099ff]"
+                      className="w-16 rounded-md bg-secondary border border-border px-2 py-1 text-xs text-foreground text-center tabular-nums outline-none focus:border-brand/60 focus:ring-2 focus:ring-ring"
                     />
-                    <span className="text-[10px] text-[#555] w-4">min</span>
+                    <span className="text-[10px] text-ink-faint w-4">min</span>
                   </div>
                 ))}
               </div>

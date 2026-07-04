@@ -60,20 +60,20 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex h-screen w-64 flex-col border-r border-[#262626] bg-[#090909] pb-9">
+    <aside className="hidden md:flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar pb-10">
       <div className="px-5 pt-6 pb-4">
         <Link href="/" className="flex items-center gap-3">
-          <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#0099ff]/15">
-            <BookOpen className="h-4 w-4 text-[#0099ff]" />
+          <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand/15">
+            <BookOpen className="h-4 w-4 text-brand" />
           </span>
           <div className="flex flex-col leading-tight">
-            <span className="text-base font-bold tracking-tight text-white">FAANG</span>
-            <span className="text-xs font-medium tracking-wider text-[#666] uppercase">Study</span>
+            <span className="text-base font-semibold tracking-tight text-foreground">FAANG</span>
+            <span className="text-[10px] font-medium tracking-[0.14em] text-ink-faint uppercase">Study</span>
           </div>
         </Link>
       </div>
 
-      <div className="h-px mx-5 bg-gradient-to-r from-[#0099ff]/40 via-[#6a4cf5]/20 to-transparent" />
+      <div className="h-px mx-5 bg-sidebar-border" />
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
         <nav className="flex flex-col gap-0.5">
@@ -91,8 +91,8 @@ export function Sidebar() {
                   className={cn(
                     'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200',
                     active
-                      ? 'bg-[#1c1c1c] text-white'
-                      : 'text-[#999999] hover:bg-[#1c1c1c] hover:text-white'
+                      ? 'bg-sidebar-accent text-foreground'
+                      : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
                   )}
                 >
                   <CatIcon cat={cat} />
@@ -100,32 +100,32 @@ export function Sidebar() {
                     {label}
                   </Link>
                   {total > 0 && (
-                    <span className="text-xs text-[#555]">{total}</span>
+                    <span className="text-xs text-ink-faint">{total}</span>
                   )}
                   {sections.length > 0 && (
                     <button
                       onClick={(e) => { e.preventDefault(); toggleExpand(cat) }}
-                      className="shrink-0 p-0.5 rounded hover:bg-[#262626] transition-colors"
+                      className="shrink-0 p-0.5 rounded hover:bg-accent transition-colors"
                     >
                       {expanded
-                        ? <ChevronDown className="h-3.5 w-3.5 text-[#666]" />
-                        : <ChevronRight className="h-3.5 w-3.5 text-[#666]" />
+                        ? <ChevronDown className="h-3.5 w-3.5 text-ink-faint" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-ink-faint" />
                       }
                     </button>
                   )}
                 </div>
 
                 {expanded && sections.length > 0 && (
-                  <div className="ml-2 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-[#262626] pl-2">
+                  <div className="ml-2 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
                     {sections.map((section) => (
                       <Link
                         key={section.label}
                         href={`/${catRoute[cat]}?section=${sectionId(section.label)}`}
-                        className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-[#888] hover:text-white hover:bg-[#141414] transition-colors duration-200"
+                        className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60 transition-colors duration-200"
                       >
                         <span className="truncate">{section.label.replace(/^Chapter \d+ — /, '')}</span>
                         {countTopics(section) > 0 && (
-                          <span className="text-[10px] text-[#555] ml-auto">{countTopics(section)}</span>
+                          <span className="text-[10px] text-ink-faint ml-auto">{countTopics(section)}</span>
                         )}
                       </Link>
                     ))}
@@ -167,13 +167,13 @@ function NavItem({
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200',
         isActive
-          ? 'bg-[#1c1c1c] text-white'
-          : 'text-[#999999] hover:bg-[#1c1c1c] hover:text-white'
+          ? 'bg-sidebar-accent text-foreground'
+          : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
       <span className="flex-1">{label}</span>
-      {hint && <span className="text-[10px] text-[#555]">{hint}</span>}
+      {hint && <span className="text-[10px] text-ink-faint">{hint}</span>}
     </Link>
   )
 }

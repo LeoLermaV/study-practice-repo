@@ -75,9 +75,9 @@ export function CommandPalette() {
                   router.push(`/${topic.category}/${topic.slug}`)
                 }}
               >
-                <span className="text-[#999999] shrink-0">{categoryIcons[topic.category] ?? null}</span>
+                <span className="text-muted-foreground shrink-0">{categoryIcons[topic.category] ?? null}</span>
                 <span className="flex-1 truncate">{topic.title}</span>
-                <span className="text-xs text-[#666] shrink-0">{topic.estimatedReadingTime}m</span>
+                <span className="text-xs text-ink-faint shrink-0">{topic.estimatedReadingTime}m</span>
               </CommandItem>
             ))}
           </CommandGroup>

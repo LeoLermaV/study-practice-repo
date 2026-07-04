@@ -73,8 +73,7 @@ export function ProgressToggles({ slug }: ProgressTogglesProps) {
 
   return (
     <div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground mr-1">Progress:</span>
+      <div className="flex flex-wrap items-center gap-2">
 
         <ToggleButton active={read} color="text-blue-500" borderColor="border-blue-500" onClick={handleRead}>
           <Eye className="h-3.5 w-3.5" />
@@ -153,10 +152,10 @@ function ToggleButton({
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.97] ${
+      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.97] ${
         active
-          ? `${color} border-${borderColor.replace('border-', '')} bg-[#1c1c1c]`
-          : 'border-[#262626] text-[#999999] hover:border-[#3d3d3d] hover:text-white'
+          ? `${color} border-${borderColor.replace('border-', '')} bg-secondary`
+          : 'border-border text-muted-foreground hover:border-ink-faint/60 hover:text-foreground'
       }`}
     >
       {children}

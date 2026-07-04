@@ -6,9 +6,59 @@ import { getStudyStats, getAllProgress } from '@/lib/progress/db'
 import type { StudyStats, TopicMeta, Category } from '@/lib/content/types'
 import { buildDailyQueue, type QueueItem } from '@/lib/progress/queue'
 import { autoPull } from '@/lib/progress/sync'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { BookOpen, BookText, Code2, Cpu, Users, ArrowRight, TrendingUp, Flame } from 'lucide-react'
+import { BookOpen, BookText, Code2, Cpu, Users, ArrowRight, TrendingUp, Flame, ChevronRight } from 'lucide-react'
+
+const categoryCards: {
+  href: string
+  title: string
+  description: string
+  icon: typeof BookOpen
+  tint: string
+  chip: string
+}[] = [
+  {
+    href: '/system-design',
+    title: 'System Design',
+    description: 'Architecture patterns, distributed systems, databases, networking',
+    icon: BookOpen,
+    tint: 'tint-blue',
+    chip: 'bg-chart-1/10 text-chart-1',
+  },
+  {
+    href: '/ddia',
+    title: 'DDIA',
+    description: 'Book study — Designing Data-Intensive Applications, 12 chapters',
+    icon: BookText,
+    tint: 'tint-violet',
+    chip: 'bg-chart-2/10 text-chart-2',
+  },
+  {
+    href: '/dsa',
+    title: 'DS&A',
+    description: 'Data structures, algorithms, LeetCode patterns, NeetCode 150',
+    icon: Code2,
+    tint: 'tint-magenta',
+    chip: 'bg-chart-3/10 text-chart-3',
+  },
+  {
+    href: '/cs-fundamentals',
+    title: 'CS Fundamentals',
+    description: 'Networking, operating systems, databases, concurrency',
+    icon: Cpu,
+    tint: 'tint-orange',
+    chip: 'bg-chart-4/10 text-chart-4',
+  },
+  {
+    href: '/behavioral',
+    title: 'Behavioral',
+    description: 'STAR method, common questions, resume, negotiation',
+    icon: Users,
+    tint: 'tint-coral',
+    chip: 'bg-chart-5/10 text-chart-5',
+  },
+]
 
 export function HomeClient({ topics }: { topics: TopicMeta[] }) {
   const [stats, setStats] = useState<StudyStats | null>(null)
@@ -25,36 +75,43 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
 
   return (
     <div className="max-w-4xl animate-fade-in">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold tracking-tight">FAANG Study</h1>
-        <p className="text-[#999999] mt-2 text-[15px]">Interview preparation platform</p>
+      <div className="mb-10">
+        <h1 className="text-[26px] md:text-[28px] font-semibold tracking-[-0.02em]">FAANG Study</h1>
+        <p className="text-muted-foreground mt-1.5 text-[15px]">Interview preparation platform</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-12">
         <StatCard icon={<TrendingUp className="h-4 w-4" />} label="Read" value={stats?.totalRead ?? 0} />
         <StatCard icon={<Flame className="h-4 w-4" />} label="Streak" value={`${stats?.currentStreak ?? 0}d`} />
         <StatCard icon={<BookOpen className="h-4 w-4" />} label="Studied" value={stats?.totalStudied ?? 0} />
         <StatCard icon={<ArrowRight className="h-4 w-4" />} label="Due" value={stats?.topicsDueForReview ?? 0} />
       </div>
 
-      <div className="mb-10">
-        <h2 className="text-xl font-semibold mb-4 tracking-tight">Today&apos;s Queue</h2>
+      <div className="mb-12">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-faint mb-4">
+          Today&apos;s Queue
+        </h2>
         <div className="grid gap-2">
           {queue.length === 0 && (
-            <p className="text-sm text-[#999999]">Nothing due. Start a new topic!</p>
+            <p className="text-sm text-muted-foreground">Nothing due. Start a new topic!</p>
           )}
           {queue.map((item) => (
             <Link key={item.topic.slug} href={`/${item.topic.category}/${item.topic.slug}`}>
-              <Card className="transition-colors duration-200 hover:bg-[#1c1c1c] hover:-translate-y-0.5">
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
+              <Card className="transition-colors duration-200 hover:bg-secondary/50 hover:border-border">
+                <CardContent className="flex min-h-14 items-center justify-between gap-3 px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <CategoryIcon category={item.topic.category} />
-                    <div>
-                      <p className="font-medium text-sm">{item.topic.title}</p>
-                      <p className="text-xs text-[#999999] capitalize">{item.reason}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{item.topic.title}</p>
+                      <p className="text-xs text-muted-foreground capitalize mt-0.5">{item.reason}</p>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="text-xs rounded-full">{item.topic.difficulty}</Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="text-xs rounded-full capitalize hidden sm:inline-flex">
+                      {item.topic.difficulty}
+                    </Badge>
+                    <ChevronRight className="h-4 w-4 text-ink-faint" />
+                  </div>
                 </CardContent>
               </Card>
             </Link>
@@ -62,84 +119,30 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link href="/system-design">
-          <Card className="spotlight-violet hover-lift border-0 relative overflow-hidden group cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <BookOpen className="h-5 w-5" />
-                System Design
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-white/80">
-                Architecture patterns, distributed systems, databases, networking
-              </p>
-            </CardContent>
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/5 pointer-events-none" />
-          </Card>
-        </Link>
-        <Link href="/ddia">
-          <Card className="hover-lift group cursor-pointer transition-colors duration-200 hover:bg-[#1c1c1c]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <BookText className="h-5 w-5" />
-                DDIA
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-[#999999]">
-                Book study — Designing Data-Intensive Applications, 12 chapters
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dsa">
-          <Card className="spotlight-magenta hover-lift border-0 relative overflow-hidden group cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Code2 className="h-5 w-5" />
-                DS&A
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-white/80">
-                Data structures, algorithms, LeetCode patterns, NeetCode 150
-              </p>
-            </CardContent>
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/5 pointer-events-none" />
-          </Card>
-        </Link>
-        <Link href="/cs-fundamentals">
-          <Card className="hover-lift group cursor-pointer transition-colors duration-200 hover:bg-[#1c1c1c]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Cpu className="h-5 w-5" />
-                CS Fundamentals
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-[#999999]">
-                Networking, operating systems, databases, concurrency
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/behavioral">
-          <Card className="hover-lift group cursor-pointer transition-colors duration-200 hover:bg-[#1c1c1c]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="h-5 w-5" />
-                Behavioral
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-[#999999]">
-                STAR method, common questions, resume, negotiation
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-faint mb-4">
+        Library
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {categoryCards.map(({ href, title, description, icon: Icon, tint, chip }) => (
+          <Link key={href} href={href}>
+            <Card className={`${tint} hover-lift group h-full cursor-pointer hover:border-border transition-colors duration-200`}>
+              <CardContent className="flex items-start gap-4 p-5">
+                <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${chip}`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-semibold flex items-center gap-1.5">
+                    {title}
+                    <ChevronRight className="h-3.5 w-3.5 text-ink-faint opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
+                  </h3>
+                  <p className="text-[13px] leading-relaxed text-muted-foreground mt-1">
+                    {description}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
     </div>
   )
@@ -147,14 +150,14 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
   return (
-    <Card className="hover-lift">
+    <Card>
       <CardContent className="p-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-9 h-9 rounded-full bg-[#1c1c1c] text-[#0099ff]">
+        <div className="flex items-center justify-center size-9 shrink-0 rounded-lg bg-brand/10 text-brand">
           {icon}
         </div>
-        <div>
-          <p className="text-xl font-bold tracking-tight">{value}</p>
-          <p className="text-xs text-[#999999]">{label}</p>
+        <div className="min-w-0">
+          <p className="text-[22px] leading-7 font-semibold tracking-[-0.01em] tabular-nums">{value}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
         </div>
       </CardContent>
     </Card>
@@ -169,5 +172,9 @@ function CategoryIcon({ category }: { category: Category }) {
     behavioral: <Users className="h-4 w-4" />,
     ddia: <BookText className="h-4 w-4" />,
   }
-  return <div className="flex items-center justify-center w-7 h-7 rounded-full bg-[#1c1c1c] text-[#0099ff]">{icons[category ?? 'dsa']}</div>
+  return (
+    <div className="flex items-center justify-center size-8 shrink-0 rounded-lg bg-brand/10 text-brand">
+      {icons[category ?? 'dsa']}
+    </div>
+  )
 }

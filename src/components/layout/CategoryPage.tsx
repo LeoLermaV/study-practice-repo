@@ -90,42 +90,42 @@ export function CategoryPageContent({
     <div className="max-w-4xl animate-fade-in">
       {filterSection ? (
         <>
-          <h1 className="text-4xl font-bold mb-2 tracking-tight">{categoryTitle}</h1>
-          <p className="text-[#999999] mb-4">
+          <h1 className="text-[26px] md:text-[28px] font-semibold mb-1.5 tracking-[-0.02em]">{categoryTitle}</h1>
+          <p className="text-[15px] text-muted-foreground mb-6">
             {filteredTopics} topics in {filteredSectionsWithTopics.length} section{filteredSectionsWithTopics.length !== 1 ? 's' : ''}
             {' — '}
-            <Link href={`/${category}`} className="text-[#0099ff] underline underline-offset-2 hover:opacity-80 transition-opacity">
+            <Link href={`/${category}`} className="text-brand underline underline-offset-2 hover:opacity-80 transition-opacity">
               View all {totalTopics} topics across {activeSections.length} sections
             </Link>
           </p>
         </>
       ) : (
         <>
-          <h1 className="text-4xl font-bold mb-2 tracking-tight">{categoryTitle}</h1>
-          <p className="text-[#999999] mb-8">
+          <h1 className="text-[26px] md:text-[28px] font-semibold mb-1.5 tracking-[-0.02em]">{categoryTitle}</h1>
+          <p className="text-[15px] text-muted-foreground mb-10">
             {totalTopics} topics across {activeSections.length} sections
           </p>
         </>
       )}
 
       {filteredSectionsWithTopics.length === 0 && filterSection && (
-        <p className="text-sm text-[#999999]">Section not found.</p>
+        <p className="text-sm text-muted-foreground">Section not found.</p>
       )}
 
       {filteredSectionsWithTopics.map(({ section, topics: secTopics }) => {
         return (
-          <div key={section.label} id={sectionId(section.label)} className="mb-10">
+          <div key={section.label} id={sectionId(section.label)} className="mb-12">
             <div className="flex items-center gap-2 mb-1">
               {section.icon ? iconMap[section.icon] : null}
-              <h2 className="text-xl font-semibold tracking-tight">{section.label}</h2>
-              <span className="text-sm text-[#999999] ml-auto">{secTopics.length} topics</span>
+              <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{section.label}</h2>
+              <span className="text-xs text-ink-faint tabular-nums ml-auto">{secTopics.length} topics</span>
             </div>
-            <p className="text-sm text-[#999999] mb-4">{section.description}</p>
+            <p className="text-[13px] text-muted-foreground mb-4">{section.description}</p>
             <div className="grid gap-2">
               {secTopics.map((topic) => (
                 <Link key={topic.slug} href={`/${category}/${topic.slug}`}>
-                  <Card className="transition-colors duration-200 hover:bg-[#1c1c1c] hover:-translate-y-0.5">
-                    <CardContent className="flex items-center justify-between p-4">
+                  <Card className="transition-colors duration-200 hover:bg-secondary/50 hover:border-border">
+                    <CardContent className="flex min-h-14 items-center justify-between px-4 py-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <h3 className="font-medium text-sm truncate">{topic.title}</h3>
@@ -133,7 +133,7 @@ export function CategoryPageContent({
                             {topic.difficulty}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-[#999999]">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-0.5">
                             <Clock className="h-3 w-3" />
                             {topic.estimatedReadingTime} min
@@ -141,7 +141,7 @@ export function CategoryPageContent({
                           <span>{topic.tags.slice(0, 2).join(', ')}</span>
                         </div>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-[#999999] shrink-0 ml-3" />
+                      <ChevronRight className="h-4 w-4 text-ink-faint shrink-0 ml-3" />
                     </CardContent>
                   </Card>
                 </Link>
@@ -153,21 +153,21 @@ export function CategoryPageContent({
 
       {!filterSection && leftovers.length > 0 && (
         <div className="mb-10">
-          <h2 className="text-xl font-semibold mb-1 tracking-tight">Additional Resources</h2>
-          <p className="text-sm text-[#999999] mb-4">Other topics that may be useful.</p>
+          <h2 className="text-[17px] font-semibold mb-1 tracking-[-0.01em]">Additional Resources</h2>
+          <p className="text-sm text-muted-foreground mb-4">Other topics that may be useful.</p>
           <div className="grid gap-2">
             {leftovers.map((topic) => (
               <Link key={topic.slug} href={`/${category}/${topic.slug}`}>
-                <Card className="transition-colors duration-200 hover:bg-[#1c1c1c] hover:-translate-y-0.5">
-                  <CardContent className="flex items-center justify-between p-4">
+                <Card className="transition-colors duration-200 hover:bg-secondary/50 hover:border-border">
+                  <CardContent className="flex min-h-14 items-center justify-between px-4 py-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-sm truncate">{topic.title}</h3>
-                      <div className="flex items-center gap-2 text-xs text-[#999999]">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         {topic.estimatedReadingTime} min
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-[#999999] shrink-0 ml-3" />
+                    <ChevronRight className="h-4 w-4 text-ink-faint shrink-0 ml-3" />
                   </CardContent>
                 </Card>
               </Link>

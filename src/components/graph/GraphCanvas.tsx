@@ -17,11 +17,11 @@ import '@xyflow/react/dist/style.css'
 import { TopicNode, type TopicNodeData } from './TopicNode'
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'system-design': '#3b82f6',
-  dsa: '#10b981',
-  ddia: '#8b5cf6',
-  'cs-fundamentals': '#64748b',
-  behavioral: '#f59e0b',
+  'system-design': '#0099ff',
+  dsa: '#c77df0',
+  ddia: '#8b84f5',
+  'cs-fundamentals': '#eb9a5f',
+  behavioral: '#ef7189',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -219,8 +219,8 @@ export function GraphCanvas() {
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors duration-200"
               style={{
                 backgroundColor: active ? `${color}18` : 'transparent',
-                color: active ? '#ffffff' : '#999999',
-                border: `1px solid ${active ? color : '#333'}`,
+                color: active ? '#e7e9ee' : '#9aa1ad',
+                border: `1px solid ${active ? color : '#2a2e37'}`,
               }}
             >
               <span

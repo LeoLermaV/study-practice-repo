@@ -61,7 +61,7 @@ export default function SearchPage() {
     <div className="max-w-3xl mx-auto animate-fade-in">
       <h1 className="text-4xl font-bold mb-6 tracking-tight">Search</h1>
       <div className="relative mb-6">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#999999]" />
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search topics..."
           value={query}
@@ -71,19 +71,19 @@ export default function SearchPage() {
         />
       </div>
 
-      {loading && <p className="text-sm text-[#999999]">Loading search index...</p>}
+      {loading && <p className="text-sm text-muted-foreground">Loading search index...</p>}
 
       <div className="grid gap-2">
         {results.map((topic) => (
           <Link key={`${topic.category}-${topic.slug}`} href={`/${topic.category}/${topic.slug}`}>
-            <Card className="transition-colors duration-200 hover:bg-[#1c1c1c] hover:-translate-y-0.5">
+            <Card className="transition-colors duration-200 hover:bg-secondary hover:-translate-y-0.5">
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="text-[#999999]">
+                <div className="text-muted-foreground">
                   {categoryIcons[topic.category as Category]}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{topic.title}</p>
-                  <div className="flex items-center gap-2 text-xs text-[#999999]">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="capitalize">{topic.category}</span>
                     <span>·</span>
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 rounded-full">{topic.difficulty}</Badge>
@@ -96,7 +96,7 @@ export default function SearchPage() {
           </Link>
         ))}
         {query && !loading && results.length === 0 && (
-          <p className="text-sm text-[#999999]">No results found for &ldquo;{query}&rdquo;</p>
+          <p className="text-sm text-muted-foreground">No results found for &ldquo;{query}&rdquo;</p>
         )}
       </div>
     </div>
