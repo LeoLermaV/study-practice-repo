@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
+import { BrandMark } from '@/components/layout/BrandMark'
 import { sectionsByCategory, sectionId, type SectionDef } from '@/lib/content/sections'
 
 const catKeys: [string, string][] = [
@@ -63,8 +64,8 @@ export function Sidebar() {
     <aside className="hidden md:flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar pb-10">
       <div className="px-5 pt-6 pb-4">
         <Link href="/" className="flex items-center gap-3">
-          <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand/15">
-            <BookOpen className="h-4 w-4 text-brand" />
+          <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand/15 text-brand">
+            <BrandMark className="h-5 w-5" />
           </span>
           <div className="flex flex-col leading-tight">
             <span className="text-base font-semibold tracking-tight text-foreground">FAANG</span>

@@ -320,6 +320,7 @@ export class HelloAlgoAdapter implements SourceAdapter {
 
     const topics: TopicMeta[] = []
     const processed: NavEntry[] = []
+    let sortIndex = 0
 
     for (const entry of contentEntries) {
       const slug = toSlug(`hello-algo-${entry.chapterTitle}-${entry.title}`.replace(/[:\s]+/g, '-'))
@@ -363,6 +364,7 @@ export class HelloAlgoAdapter implements SourceAdapter {
         prerequisites: prereqs.filter(Boolean),
         relatedTopics: related.filter(Boolean),
         sourceRepos: [this.name],
+        sortOrder: sortIndex++,
       })
 
       processed.push(entry)

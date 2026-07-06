@@ -22,6 +22,7 @@ export interface TopicMeta {
   prerequisites: string[]
   relatedTopics: string[]
   sourceRepos: string[]
+  sortOrder?: number
   neetcodeRoadmap?: NeetcodeRoadmap
   leetcodePatterns?: LeetcodePatterns
 }

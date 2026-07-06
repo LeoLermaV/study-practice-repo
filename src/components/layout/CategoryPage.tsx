@@ -50,7 +50,12 @@ export function CategoryPageContent({
       for (const [slug, topic] of allTopicMap) {
         if (slug.startsWith(section.slugPrefix)) matched.push(topic)
       }
-      matched.sort((a, b) => a.title.localeCompare(b.title))
+      matched.sort((a, b) => {
+        const aOrder = a.sortOrder ?? 999
+        const bOrder = b.sortOrder ?? 999
+        if (aOrder !== bOrder) return aOrder - bOrder
+        return a.title.localeCompare(b.title)
+      })
       return matched
     }
     const matched: TopicWithSlug[] = []

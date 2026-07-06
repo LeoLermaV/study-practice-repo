@@ -8,6 +8,7 @@ import { buildDailyQueue, type QueueItem } from '@/lib/progress/queue'
 import { autoPull } from '@/lib/progress/sync'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { BrandMark } from '@/components/layout/BrandMark'
 import { BookOpen, BookText, Code2, Cpu, Users, ArrowRight, TrendingUp, Flame, ChevronRight } from 'lucide-react'
 
 const categoryCards: {
@@ -76,8 +77,15 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
   return (
     <div className="max-w-4xl animate-fade-in">
       <div className="mb-10">
-        <h1 className="text-[26px] md:text-[28px] font-semibold tracking-[-0.02em]">FAANG Study</h1>
-        <p className="text-muted-foreground mt-1.5 text-[15px]">Interview preparation platform</p>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center justify-center size-11 rounded-xl bg-brand/10 text-brand shrink-0">
+            <BrandMark className="h-7 w-7" />
+          </span>
+          <div>
+            <h1 className="text-[26px] md:text-[28px] font-semibold tracking-[-0.02em] leading-none">FAANG Study</h1>
+            <p className="text-muted-foreground mt-1.5 text-[15px]">Interview preparation platform</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-12">
