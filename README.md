@@ -4,6 +4,9 @@ A personal web app for studying FAANG interviews. Content-first, local-first, mi
 
 **432 topics** across 5 categories, ingested from 7 open-source GitHub repos.
 
+
+Live Repo: [Study Practice Repo](https://leolermav.github.io/study-practice-repo/)
+
 ---
 
 ## Quick start
