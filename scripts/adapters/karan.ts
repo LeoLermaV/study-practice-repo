@@ -6,6 +6,7 @@ import type { SourceAdapter } from './base'
 const cacheDir = path.join(process.cwd(), '.cache', 'repos')
 
 const CHAPTER_PROGRESSION: Record<string, Difficulty> = {
+  'what-is-system-design': 'beginner',
   'system-design': 'beginner',
   'ip': 'beginner',
   'osi-model': 'beginner',
@@ -97,6 +98,10 @@ function inferPrerequisites(topics: { slug: string; order: number }[]): Map<stri
   return prereqs
 }
 
+const PREREQ_OVERRIDES: Record<string, string[]> = {
+  'system-design-interviews': ['what-is-system-design'],
+}
+
 export class KaranAdapter implements SourceAdapter {
   name = 'karanpratapsingh-system-design'
   cloneUrl = 'https://github.com/karanpratapsingh/system-design.git'
@@ -112,7 +117,11 @@ export class KaranAdapter implements SourceAdapter {
     const sections = content.split(/(?=^# )/m)
     const topicSections = sections.filter((s) => {
       const firstLine = s.trim().split('\n')[0]
-      return firstLine.startsWith('# ') && !firstLine.includes('Table of Contents') && firstLine.trim() !== '# System Design'
+      const lower = firstLine.toLowerCase()
+      return firstLine.startsWith('# ') && firstLine.trim() !== '# System Design'
+        && !lower.includes('table of contents')
+        && !lower.includes('next steps')
+        && !lower.includes('references')
     })
 
     this.parsedTopics = []
@@ -131,6 +140,9 @@ export class KaranAdapter implements SourceAdapter {
 
     const orderMap = new Map(this.parsedTopics.map((t) => [t.slug, t.order]))
     const prereqs = inferPrerequisites(this.parsedTopics)
+    for (const [slug, override] of Object.entries(PREREQ_OVERRIDES)) {
+      prereqs.set(slug, override)
+    }
 
     this.allTopics = this.parsedTopics.map((t) => {
       const related = this.parsedTopics
