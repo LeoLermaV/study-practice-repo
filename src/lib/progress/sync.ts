@@ -1,20 +1,29 @@
 import { get, set, keys as idbKeys } from 'idb-keyval'
 import type { ProgressEntry } from '../content/types'
+import { mergeEntry, mergeStudyLog, normalizeEntry } from './merge'
 
 const GIST_FILENAME = 'faang-study-progress.json'
 const GIST_DESCRIPTION = 'FAANG Study — progress sync'
 const GIST_ID_KEY = 'gist-sync-id'
 const TOKEN_KEY = 'gist-sync-token'
 const LAST_SYNC_KEY = 'gist-sync-last'
+const LAST_ERROR_KEY = 'gist-sync-error'
 
 const PROGRESS_PREFIX = 'progress:'
 const STUDY_LOG_KEY = 'study-log'
 
-interface SyncPayload {
+const PUSH_DEBOUNCE_MS = 2000
+
+export interface SyncPayload {
   version: 1
   updatedAt: number
   entries: Record<string, ProgressEntry>
   studyLog: string[]
+}
+
+export interface SyncStatus {
+  lastSync: number | null
+  lastError: string | null
 }
 
 function token(): string | null {
@@ -41,6 +50,7 @@ export function clearToken() {
   try { localStorage.removeItem(TOKEN_KEY) } catch {}
   try { localStorage.removeItem(GIST_ID_KEY) } catch {}
   try { localStorage.removeItem(LAST_SYNC_KEY) } catch {}
+  try { localStorage.removeItem(LAST_ERROR_KEY) } catch {}
 }
 
 export function getLastSync(): number | null {
@@ -52,6 +62,19 @@ export function getLastSync(): number | null {
 
 function setLastSync(ts: number) {
   try { localStorage.setItem(LAST_SYNC_KEY, String(ts)) } catch {}
+}
+
+function setSyncError(message: string | null) {
+  try {
+    if (message) localStorage.setItem(LAST_ERROR_KEY, message)
+    else localStorage.removeItem(LAST_ERROR_KEY)
+  } catch {}
+}
+
+export function getSyncStatus(): SyncStatus {
+  let lastError: string | null = null
+  try { lastError = localStorage.getItem(LAST_ERROR_KEY) } catch {}
+  return { lastSync: getLastSync(), lastError }
 }
 
 async function apiGet(url: string, tok: string): Promise<unknown> {
@@ -128,44 +151,91 @@ export async function pullProgress(tok: string): Promise<SyncPayload | null> {
   const file = files[GIST_FILENAME]
   if (!file) throw new Error('Gist missing progress file')
 
-  const payload = JSON.parse(file.content) as SyncPayload
-  return payload
+  return JSON.parse(file.content) as SyncPayload
 }
 
-export async function pushProgress(tok: string, payload: SyncPayload): Promise<void> {
-  if (Object.keys(payload.entries).length === 0 && payload.studyLog.length === 0) {
-    throw new Error('Nothing to sync — study some topics first')
-  }
+function isEmpty(payload: SyncPayload): boolean {
+  return Object.keys(payload.entries).length === 0 && payload.studyLog.length === 0
+}
 
+function mergePayload(a: SyncPayload, b: SyncPayload): SyncPayload {
+  const entries: Record<string, ProgressEntry> = {}
+  for (const [slug, entry] of Object.entries(a.entries)) {
+    entries[slug] = normalizeEntry(entry)
+  }
+  for (const [slug, entry] of Object.entries(b.entries)) {
+    const existing = entries[slug]
+    entries[slug] = existing ? mergeEntry(existing, entry) : normalizeEntry(entry)
+  }
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    entries,
+    studyLog: mergeStudyLog(a.studyLog, b.studyLog),
+  }
+}
+
+async function writeGist(tok: string, payload: SyncPayload): Promise<void> {
+  const content = JSON.stringify(payload, null, 2)
   let id = gistId()
+
   if (id) {
     try {
       await apiPatch(`https://api.github.com/gists/${id}`, tok, {
         description: GIST_DESCRIPTION,
-        files: { [GIST_FILENAME]: { content: JSON.stringify(payload, null, 2) } },
+        files: { [GIST_FILENAME]: { content } },
       })
-      setLastSync(Date.now())
       return
     } catch (e) {
       const msg = (e as Error).message
-      if (msg.includes('404')) {
-        id = null
-        setGistId('')
-      } else {
-        throw e
-      }
+      if (!msg.includes('404')) throw e
+      id = null
+      setGistId('')
     }
   }
 
-  if (!id) {
-    const created = await apiPost('https://api.github.com/gists', tok, {
-      description: GIST_DESCRIPTION,
-      public: false,
-      files: { [GIST_FILENAME]: { content: JSON.stringify(payload, null, 2) } },
-    }) as Record<string, unknown>
-    setGistId(created.id as string)
+  const created = await apiPost('https://api.github.com/gists', tok, {
+    description: GIST_DESCRIPTION,
+    public: false,
+    files: { [GIST_FILENAME]: { content } },
+  }) as Record<string, unknown>
+  setGistId(created.id as string)
+}
+
+let inFlight: Promise<unknown> = Promise.resolve()
+
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const run = inFlight.then(fn, fn)
+  inFlight = run.catch(() => {})
+  return run
+}
+
+/**
+ * Read-modify-write: a device that never pulled cannot clobber the gist, because
+ * remote state is merged in before the file is replaced.
+ */
+export async function pushProgress(tok: string): Promise<number> {
+  return serialize(async () => {
+    const local = await exportProgress()
+
+    let remote: SyncPayload | null = null
+    try {
+      remote = await pullProgress(tok)
+    } catch (e) {
+      if (!(e as Error).message.includes('404')) throw e
+      setGistId('')
+    }
+
+    const merged = remote ? mergePayload(local, remote) : local
+    if (isEmpty(merged)) throw new Error('Nothing to sync — study some topics first')
+
+    await applyPayload(merged)
+    await writeGist(tok, merged)
+
     setLastSync(Date.now())
-  }
+    setSyncError(null)
+    return Object.keys(merged.entries).length
+  })
 }
 
 export async function exportProgress(): Promise<SyncPayload> {
@@ -176,39 +246,34 @@ export async function exportProgress(): Promise<SyncPayload> {
   for (const k of progressKeys) {
     const raw = await get(k as string)
     if (!raw) continue
-    const e = raw as unknown as ProgressEntry
-    if (e.slug) {
-      entries[e.slug] = e
-    }
+    const e = raw as ProgressEntry
+    if (e.slug) entries[e.slug] = normalizeEntry(e)
   }
 
   const studyLog: string[] = await get(STUDY_LOG_KEY) ?? []
 
-  return {
-    version: 1,
-    updatedAt: Date.now(),
-    entries,
-    studyLog,
+  return { version: 1, updatedAt: Date.now(), entries, studyLog }
+}
+
+async function applyPayload(payload: SyncPayload): Promise<void> {
+  for (const [slug, entry] of Object.entries(payload.entries)) {
+    const key = `${PROGRESS_PREFIX}${slug}`
+    const existing = await get(key) as ProgressEntry | undefined
+    await set(key, existing ? mergeEntry(existing, entry) : normalizeEntry(entry))
+  }
+
+  if (payload.studyLog?.length) {
+    const existing: string[] = await get(STUDY_LOG_KEY) ?? []
+    await set(STUDY_LOG_KEY, mergeStudyLog(existing, payload.studyLog))
   }
 }
 
 export async function importProgress(payload: SyncPayload): Promise<void> {
-  for (const [slug, entry] of Object.entries(payload.entries)) {
-    const key = `${PROGRESS_PREFIX}${slug}`
-    const existing = await get(key) as ProgressEntry | undefined
-
-    if (!existing || (entry.practicedAt ?? 0) >= (existing.practicedAt ?? 0)) {
-      await set(key, entry)
-    }
-  }
-
-  if (payload.studyLog && payload.studyLog.length > 0) {
-    const existing: string[] = await get(STUDY_LOG_KEY) ?? []
-    const merged = [...new Set([...existing, ...payload.studyLog])]
-    await set(STUDY_LOG_KEY, merged)
-  }
-
-  setLastSync(Date.now())
+  await serialize(async () => {
+    await applyPayload(payload)
+    setLastSync(Date.now())
+    setSyncError(null)
+  })
 }
 
 const AUTO_SYNC_KEY = 'gist-sync-auto'
@@ -221,18 +286,44 @@ export function setAutoSync(on: boolean) {
   try { localStorage.setItem(AUTO_SYNC_KEY, String(on)) } catch {}
 }
 
-export async function autoPush() {
-  if (!isAutoSync()) return
+let pushTimer: ReturnType<typeof setTimeout> | null = null
+let pushPending = false
+
+async function runPush(): Promise<void> {
+  if (!pushPending) return
+  pushPending = false
   const t = token()
   if (!t) return
   try {
-    const payload = await exportProgress()
-    if (Object.keys(payload.entries).length === 0) return
-    await pushProgress(t, payload)
-  } catch {}
+    const local = await exportProgress()
+    if (isEmpty(local)) return
+    await pushProgress(t)
+  } catch (e) {
+    setSyncError((e as Error).message)
+  }
 }
 
-export async function autoPull() {
+/** Debounced: a Read → Studied → Practiced click-through coalesces into one gist write. */
+export function autoPush(): void {
+  if (!isAutoSync()) return
+  if (!token()) return
+  pushPending = true
+  if (pushTimer) clearTimeout(pushTimer)
+  pushTimer = setTimeout(() => {
+    pushTimer = null
+    void runPush()
+  }, PUSH_DEBOUNCE_MS)
+}
+
+export async function flushPush(): Promise<void> {
+  if (pushTimer) {
+    clearTimeout(pushTimer)
+    pushTimer = null
+  }
+  await runPush()
+}
+
+export async function autoPull(): Promise<void> {
   if (!isAutoSync()) return
   const t = token()
   if (!t) return
@@ -240,5 +331,7 @@ export async function autoPull() {
     const payload = await pullProgress(t)
     if (!payload) return
     await importProgress(payload)
-  } catch {}
+  } catch (e) {
+    setSyncError((e as Error).message)
+  }
 }

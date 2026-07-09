@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Download, Upload, Trash2, Eye, EyeOff } from 'lucide-react'
-import { getToken, setToken, clearToken, getLastSync, pushProgress, pullProgress, exportProgress, importProgress, isAutoSync, setAutoSync } from '@/lib/progress/sync'
+import { getToken, setToken, clearToken, getSyncStatus, pushProgress, pullProgress, importProgress, isAutoSync, setAutoSync } from '@/lib/progress/sync'
 
 export default function SettingsPage() {
   const [token, setTokenState] = useState('')
   const [tokenSaved, setTokenSaved] = useState(false)
   const [lastSync, setLastSync] = useState<number | null>(null)
+  const [lastError, setLastError] = useState<string | null>(null)
   const [showToken, setShowToken] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [autoSync, setAutoSyncState] = useState(false)
@@ -22,7 +23,9 @@ export default function SettingsPage() {
       setTokenState(t)
       setTokenSaved(true)
     }
-    setLastSync(getLastSync())
+    const status = getSyncStatus()
+    setLastSync(status.lastSync)
+    setLastError(status.lastError)
     setAutoSyncState(isAutoSync())
   }, [])
 
@@ -44,6 +47,7 @@ export default function SettingsPage() {
     setTokenState('')
     setTokenSaved(false)
     setLastSync(null)
+    setLastError(null)
     flash('Token removed', true)
   }
 
@@ -59,11 +63,10 @@ export default function SettingsPage() {
     }
     setSyncing(true)
     try {
-      const payload = await exportProgress()
-      await pushProgress(t, payload)
+      const count = await pushProgress(t)
       setLastSync(Date.now())
-      const count = Object.keys(payload.entries).length
-      flash(`Pushed ${count} topics`, true)
+      setLastError(null)
+      flash(`Synced ${count} topics`, true)
     } catch (e) {
       flash((e as Error).message, false)
     } finally {
@@ -90,6 +93,7 @@ export default function SettingsPage() {
       }
       await importProgress(payload)
       setLastSync(Date.now())
+      setLastError(null)
       const count = Object.keys(payload.entries).length
       flash(`Pulled ${count} topics`, true)
     } catch (e) {
@@ -193,7 +197,8 @@ export default function SettingsPage() {
             </button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Automatically push after each progress change and pull on app open. Requires a saved token.
+            Automatically pulls on app open and pushes after each progress change. Remote progress is
+            merged in before pushing, so no device can overwrite another. Requires a saved token.
           </p>
 
           <Separator />
@@ -202,6 +207,12 @@ export default function SettingsPage() {
             <span>Last synced: {formatDate(lastSync)}</span>
             {tokenSaved && <span className="text-emerald-500">Token saved</span>}
           </div>
+
+          {lastError && (
+            <div className="text-xs rounded-lg px-3 py-2 text-red-400 bg-red-400/10">
+              Last sync failed: {lastError}
+            </div>
+          )}
 
           {message && (
             <div className={`text-xs rounded-lg px-3 py-2 ${message.ok ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'}`}>

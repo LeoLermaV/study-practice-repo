@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { CommandPalette } from "@/components/search/CommandPalette";
 import { PomodoroTimer } from "@/components/pomodoro/PomodoroTimer";
+import { SyncProvider } from "@/components/layout/SyncProvider";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({
     >
       <body className="min-h-full">
         <ThemeProvider>
+          <SyncProvider />
           <CommandPalette />
           <div className="flex h-screen">
             <Sidebar />

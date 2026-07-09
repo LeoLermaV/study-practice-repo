@@ -51,6 +51,7 @@ export interface ProgressEntry {
   practiceNotes: PracticeNote[]
   reviewCount: number
   nextReviewDue: number
+  deletedNotes: number[]
 }
 
 export interface StudyStats {

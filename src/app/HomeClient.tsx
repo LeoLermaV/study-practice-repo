@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { getStudyStats, getAllProgress } from '@/lib/progress/db'
 import type { StudyStats, TopicMeta, Category } from '@/lib/content/types'
 import { buildDailyQueue, type QueueItem } from '@/lib/progress/queue'
-import { autoPull } from '@/lib/progress/sync'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BrandMark } from '@/components/layout/BrandMark'
@@ -66,11 +65,9 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
   const [queue, setQueue] = useState<QueueItem[]>([])
 
   useEffect(() => {
-    autoPull().then(() => {
-      getStudyStats().then(setStats)
-      getAllProgress().then((progress) => {
-        setQueue(buildDailyQueue(topics, progress))
-      })
+    getStudyStats().then(setStats)
+    getAllProgress().then((progress) => {
+      setQueue(buildDailyQueue(topics, progress))
     })
   }, [topics])
 

@@ -84,7 +84,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Prerequisites</span>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {meta.prerequisites.map((p) => (
-              <Badge key={p} variant="secondary" className="text-xs rounded-full capitalize hover:bg-accent transition-colors duration-200">
+              <Badge key={p} variant="secondary" className="text-xs rounded-full capitalize hover:bg-accent transition-colors duration-200 max-w-full h-auto whitespace-normal text-left">
                 <Link href={`/${category}/${p}`}>{p.replace(/-/g, ' ')}</Link>
               </Badge>
             ))}
@@ -97,7 +97,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Related</span>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {meta.relatedTopics.map((r) => (
-              <Badge key={r} variant="outline" className="text-xs rounded-full capitalize hover:bg-secondary transition-colors duration-200">
+              <Badge key={r} variant="outline" className="text-xs rounded-full capitalize hover:bg-secondary transition-colors duration-200 max-w-full h-auto whitespace-normal text-left">
                 <Link href={`/${category}/${r}`}>{r.replace(/-/g, ' ')}</Link>
               </Badge>
             ))}

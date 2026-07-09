@@ -1,57 +1,125 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { get } from 'idb-keyval'
 import { getStudyStats, getAllProgress } from '@/lib/progress/db'
-import type { StudyStats, ProgressEntry, PracticeNote, Category } from '@/lib/content/types'
+import type { StudyStats, ProgressEntry, TopicMeta, Category } from '@/lib/content/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Flame, BookOpen, TrendingUp, RefreshCw, Eye, BookMarked, CheckCircle } from 'lucide-react'
+import { Flame, BookOpen, TrendingUp, RefreshCw } from 'lucide-react'
 
 const STUDY_LOG_KEY = 'study-log'
+const INITIAL_ROWS = 20
 
-function slugToCategory(slug: string): Category {
-  if (slug.startsWith('ddia-')) return 'ddia'
-  if (slug.startsWith('behavioral-')) return 'behavioral'
-  if (slug.startsWith('hello-algo-') || slug.startsWith('cheatsheet-')) return 'dsa'
-  if (['coding-interview-prep', 'interview-cheatsheet', 'interview-rubrics', 'picking-a-language',
-       'study-plan', 'problem-solving-techniques', 'mock-interviews'].includes(slug)) return 'cs-fundamentals'
-  if (slug.startsWith('donnemartin-') || slug.match(/^\d-d-/) || slug.match(/^[a-z]+(?:-blind75)?$/)) return 'dsa'
-  return 'system-design'
+type Stage = 'read' | 'studied' | 'practiced'
+
+const STAGES: Stage[] = ['read', 'studied', 'practiced']
+
+const stageStyle: Record<Stage, { label: string; dot: string }> = {
+  read: { label: 'Read', dot: 'bg-brand' },
+  studied: { label: 'Studied', dot: 'bg-amber-500' },
+  practiced: { label: 'Practiced', dot: 'bg-emerald-500' },
+}
+
+const categories: Category[] = ['system-design', 'dsa', 'ddia', 'cs-fundamentals', 'behavioral']
+
+const catNames: Record<Category, string> = {
+  'system-design': 'System Design',
+  dsa: 'DS&A',
+  ddia: 'DDIA',
+  'cs-fundamentals': 'CS Fundamentals',
+  behavioral: 'Behavioral',
+}
+
+interface ActivityRow {
+  slug: string
+  title: string
+  category: Category
+  stage: Stage
+  lastTouched: number
+}
+
+function furthestStage(entry: ProgressEntry): Stage | null {
+  if (entry.practicedAt) return 'practiced'
+  if (entry.studiedAt) return 'studied'
+  if (entry.readAt) return 'read'
+  return null
+}
+
+function lastTouched(entry: ProgressEntry): number {
+  return Math.max(entry.readAt ?? 0, entry.studiedAt ?? 0, entry.practicedAt ?? 0)
 }
 
 export default function ProgressPage() {
   const [stats, setStats] = useState<StudyStats | null>(null)
-  const [recentNotes, setRecentNotes] = useState<{ slug: string; note: PracticeNote }[]>([])
   const [studyDates, setStudyDates] = useState<Set<string>>(new Set())
   const [allProgress, setAllProgress] = useState<ProgressEntry[]>([])
+  const [topicIndex, setTopicIndex] = useState<Map<string, TopicMeta> | null>(null)
+  const [filter, setFilter] = useState<Stage | 'all'>('all')
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     getStudyStats().then(setStats)
     get(STUDY_LOG_KEY).then((dates: string[] | undefined) => {
       if (dates) setStudyDates(new Set(dates))
     })
-    getAllProgress().then((all) => {
-      setAllProgress(all)
-      const notes: { slug: string; note: PracticeNote }[] = []
-      for (const entry of all) {
-        for (const note of entry.practiceNotes) {
-          notes.push({ slug: entry.slug, note })
-        }
-      }
-      notes.sort((a, b) => b.note.timestamp - a.note.timestamp)
-      setRecentNotes(notes.slice(0, 10))
-    })
+    getAllProgress().then(setAllProgress)
+
+    fetch('/topics-graph.json')
+      .then((res) => res.json())
+      .then((data: { nodes: TopicMeta[] }) => {
+        setTopicIndex(new Map(data.nodes.map((n) => [n.slug, n])))
+      })
+      .catch(() => setTopicIndex(new Map()))
   }, [])
+
+  const activity = useMemo<ActivityRow[]>(() => {
+    if (!topicIndex) return []
+    const rows: ActivityRow[] = []
+    for (const entry of allProgress) {
+      const stage = furthestStage(entry)
+      const meta = topicIndex.get(entry.slug)
+      // Content can be re-ingested out from under stored progress.
+      if (!stage || !meta) continue
+      rows.push({
+        slug: entry.slug,
+        title: meta.title,
+        category: meta.category,
+        stage,
+        lastTouched: lastTouched(entry),
+      })
+    }
+    return rows.sort((a, b) => b.lastTouched - a.lastTouched)
+  }, [allProgress, topicIndex])
+
+  const filtered = useMemo(
+    () => (filter === 'all' ? activity : activity.filter((r) => r.stage === filter)),
+    [activity, filter]
+  )
+
+  const byCategory = useMemo(() => {
+    const acc = new Map<Category, { read: number; studied: number; practiced: number; total: number }>()
+    for (const cat of categories) acc.set(cat, { read: 0, studied: 0, practiced: 0, total: 0 })
+    if (!topicIndex) return acc
+
+    for (const meta of topicIndex.values()) {
+      const d = acc.get(meta.category)
+      if (d) d.total++
+    }
+    for (const entry of allProgress) {
+      const meta = topicIndex.get(entry.slug)
+      if (!meta) continue
+      const d = acc.get(meta.category)
+      if (!d) continue
+      if (entry.readAt) d.read++
+      if (entry.studiedAt) d.studied++
+      if (entry.practicedAt) d.practiced++
+    }
+    return acc
+  }, [allProgress, topicIndex])
 
   if (!stats) return <div className="max-w-3xl mx-auto"><p className="text-muted-foreground">Loading...</p></div>
 
-  const totalActive = stats.totalRead + stats.totalStudied + stats.totalPracticed
-  const progressPct = totalActive > 0 ? Math.round((stats.totalPracticed / totalActive) * 100) : 0
-
-  // Due forecast: next 7 days
-  const now = Date.now()
   const dueForecast: { day: number; count: number }[] = []
   for (let d = 0; d < 7; d++) {
     const dayStart = new Date()
@@ -64,22 +132,6 @@ export default function ProgressPage() {
     dueForecast.push({ day: d, count })
   }
 
-  // Mastery per category
-  const categories: Category[] = ['system-design', 'dsa', 'ddia', 'cs-fundamentals', 'behavioral']
-  const byCategory = new Map<Category, { read: number; studied: number; practiced: number; total: number }>()
-  for (const cat of categories) byCategory.set(cat, { read: 0, studied: 0, practiced: 0, total: 0 })
-  for (const entry of allProgress) {
-    const cat = slugToCategory(entry.slug)
-    const d = byCategory.get(cat)
-    if (d) {
-      if (entry.readAt) d.read++
-      if (entry.studiedAt) d.studied++
-      if (entry.practicedAt) d.practiced++
-      d.total++
-    }
-  }
-
-  // Heatmap: last 52 weeks
   const heatmapCells: { date: string; count: number }[] = []
   const today = new Date()
   for (let i = 364; i >= 0; i--) {
@@ -89,13 +141,7 @@ export default function ProgressPage() {
   }
 
   const dayNames = ['Mon', '', 'Wed', '', 'Fri', '', '']
-  const catNames: Record<string, string> = {
-    'system-design': 'System Design',
-    dsa: 'DS&A',
-    ddia: 'DDIA',
-    'cs-fundamentals': 'CS Fundamentals',
-    behavioral: 'Behavioral',
-  }
+  const visible = expanded ? filtered : filtered.slice(0, INITIAL_ROWS)
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -108,7 +154,65 @@ export default function ProgressPage() {
         <StatCard icon={<RefreshCw className="h-5 w-5" />} label="Due for Review" value={`${stats.topicsDueForReview}`} />
       </div>
 
-      {/* Heatmap */}
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
+          <CardTitle className="text-lg">Recent Activity</CardTitle>
+          <div className="flex items-center gap-1">
+            <FilterChip label="All" active={filter === 'all'} onClick={() => { setFilter('all'); setExpanded(false) }} />
+            {STAGES.map((s) => (
+              <FilterChip
+                key={s}
+                label={stageStyle[s].label}
+                active={filter === s}
+                onClick={() => { setFilter(s); setExpanded(false) }}
+              />
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!topicIndex ? (
+            <p className="text-sm text-muted-foreground">Loading topics...</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {activity.length === 0
+                ? 'Nothing marked yet. Open a topic and mark it Read.'
+                : `No topics marked ${stageStyle[filter as Stage].label.toLowerCase()}.`}
+            </p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {visible.map((row) => (
+                  <Link
+                    key={row.slug}
+                    href={`/${row.category}/${row.slug}`}
+                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm hover:bg-secondary transition-colors duration-200"
+                  >
+                    <span className="font-medium truncate">{row.title}</span>
+                    <span className="flex items-center gap-3 shrink-0">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className={`h-1.5 w-1.5 rounded-full ${stageStyle[row.stage].dot}`} />
+                        {stageStyle[row.stage].label}
+                      </span>
+                      <span className="text-xs text-ink-faint tabular-nums w-14 text-right">
+                        {formatTimeAgo(row.lastTouched)}
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              {filtered.length > INITIAL_ROWS && (
+                <button
+                  onClick={() => setExpanded(!expanded)}
+                  className="mt-3 ml-auto block text-xs text-brand hover:opacity-80 transition-opacity"
+                >
+                  {expanded ? 'Show less' : `Show all ${filtered.length} →`}
+                </button>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">Study Activity (12 months)</CardTitle>
@@ -116,8 +220,8 @@ export default function ProgressPage() {
         <CardContent>
           <div className="flex gap-1">
             <div className="flex flex-col gap-1 pt-2">
-              {dayNames.map((d) => (
-                <span key={d} className="text-[10px] text-ink-faint h-3 leading-3">{d}</span>
+              {dayNames.map((d, i) => (
+                <span key={i} className="text-[10px] text-ink-faint h-3 leading-3">{d}</span>
               ))}
             </div>
             <div className="flex gap-0.5 flex-wrap">
@@ -143,7 +247,6 @@ export default function ProgressPage() {
         </CardContent>
       </Card>
 
-      {/* Mastery per category */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">Mastery by Category</CardTitle>
@@ -158,7 +261,7 @@ export default function ProgressPage() {
             return (
               <div key={cat}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">{catNames[cat] ?? cat}</span>
+                  <span className="text-sm font-medium">{catNames[cat]}</span>
                   <span className="text-xs text-ink-faint">{d.practiced}/{d.total}</span>
                 </div>
                 <div className="flex h-2 rounded-full overflow-hidden bg-secondary">
@@ -177,7 +280,6 @@ export default function ProgressPage() {
         </CardContent>
       </Card>
 
-      {/* Due forecast */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">Due Forecast</CardTitle>
@@ -204,31 +306,20 @@ export default function ProgressPage() {
           </div>
         </CardContent>
       </Card>
-
-      {stats.recentlyStudied.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-lg">Recently Studied</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {stats.recentlyStudied.map(({ slug, lastTouched }) => (
-                <Link
-                  key={slug}
-                  href={`/${slugToCategory(slug)}/${slug}`}
-                  className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-secondary transition-colors duration-200"
-                >
-                  <span className="font-medium truncate">{slug.replace(/-/g, ' ')}</span>
-                  <span className="text-xs text-ink-faint shrink-0 ml-3">
-                    {formatTimeAgo(lastTouched)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
+  )
+}
+
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-2.5 py-1 text-xs transition-colors duration-200 ${
+        active ? 'bg-secondary text-foreground' : 'text-ink-faint hover:text-foreground'
+      }`}
+    >
+      {label}
+    </button>
   )
 }
 

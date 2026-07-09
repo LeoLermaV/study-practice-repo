@@ -1,6 +1,7 @@
 import { get, set, del, keys } from 'idb-keyval'
 import type { ProgressEntry, PracticeNote, StudyStats } from '../content/types'
 import { autoPush } from './sync'
+import { normalizeEntry } from './merge'
 
 const PROGRESS_PREFIX = 'progress:'
 const STUDY_LOG_KEY = 'study-log'
@@ -21,10 +22,11 @@ function migrateEntry(raw: unknown): ProgressEntry | undefined {
       practiceNotes: [],
       reviewCount: (entry.reviewCount as number) ?? 0,
       nextReviewDue: (entry.nextReviewDue as number) ?? (now + 86400000),
+      deletedNotes: [],
     }
   }
   if (entry.readAt === undefined) return undefined
-  return entry as unknown as ProgressEntry
+  return normalizeEntry(entry as unknown as ProgressEntry)
 }
 
 export async function getProgress(slug: string): Promise<ProgressEntry | undefined> {
@@ -70,6 +72,7 @@ export async function markRead(slug: string): Promise<ProgressEntry> {
     practiceNotes: existing?.practiceNotes ?? [],
     reviewCount: existing?.reviewCount ?? 0,
     nextReviewDue: existing?.nextReviewDue ?? (now + 86400000),
+    deletedNotes: existing?.deletedNotes ?? [],
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
@@ -88,6 +91,7 @@ export async function markStudied(slug: string): Promise<ProgressEntry> {
     practiceNotes: existing?.practiceNotes ?? [],
     reviewCount: existing?.reviewCount ?? 0,
     nextReviewDue: existing?.nextReviewDue ?? (now + 86400000),
+    deletedNotes: existing?.deletedNotes ?? [],
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
@@ -106,6 +110,7 @@ export async function markPracticed(slug: string): Promise<ProgressEntry> {
     practiceNotes: existing?.practiceNotes ?? [],
     reviewCount: rc,
     nextReviewDue: nextDue(rc),
+    deletedNotes: existing?.deletedNotes ?? [],
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
@@ -125,6 +130,7 @@ export async function addPracticeNote(slug: string, text: string): Promise<Progr
     practiceNotes: [...(existing?.practiceNotes ?? []), note],
     reviewCount: rc,
     nextReviewDue: nextDue(rc),
+    deletedNotes: existing?.deletedNotes ?? [],
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
@@ -134,11 +140,15 @@ export async function addPracticeNote(slug: string, text: string): Promise<Progr
 export async function removePracticeNote(slug: string, timestamp: number): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   if (!existing) throw new Error('No progress entry')
+  // Tombstone, not just a filter: notes union-merge across devices, so without
+  // this the deleted note reappears on the next pull.
   const entry: ProgressEntry = {
     ...existing,
     practiceNotes: existing.practiceNotes.filter((n) => n.timestamp !== timestamp),
+    deletedNotes: [...new Set([...existing.deletedNotes, timestamp])].sort((a, b) => a - b),
   }
   await setProgress(slug, entry)
+  autoPush()
   return entry
 }
 

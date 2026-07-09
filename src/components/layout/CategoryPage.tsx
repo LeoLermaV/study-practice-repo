@@ -128,7 +128,7 @@ export function CategoryPageContent({
             <p className="text-[13px] text-muted-foreground mb-4">{section.description}</p>
             <div className="grid gap-2">
               {secTopics.map((topic) => (
-                <Link key={topic.slug} href={`/${category}/${topic.slug}`}>
+                <Link key={topic.slug} href={`/${category}/${topic.slug}`} className="min-w-0">
                   <Card className="transition-colors duration-200 hover:bg-secondary/50 hover:border-border">
                     <CardContent className="flex min-h-14 items-center justify-between px-4 py-3">
                       <div className="flex-1 min-w-0">
@@ -162,7 +162,7 @@ export function CategoryPageContent({
           <p className="text-sm text-muted-foreground mb-4">Other topics that may be useful.</p>
           <div className="grid gap-2">
             {leftovers.map((topic) => (
-              <Link key={topic.slug} href={`/${category}/${topic.slug}`}>
+              <Link key={topic.slug} href={`/${category}/${topic.slug}`} className="min-w-0">
                 <Card className="transition-colors duration-200 hover:bg-secondary/50 hover:border-border">
                   <CardContent className="flex min-h-14 items-center justify-between px-4 py-3">
                     <div className="flex-1 min-w-0">
