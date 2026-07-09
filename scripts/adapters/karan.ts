@@ -145,10 +145,11 @@ export class KaranAdapter implements SourceAdapter {
     }
 
     this.allTopics = this.parsedTopics.map((t) => {
-      const related = this.parsedTopics
-        .filter((other) => other.order !== t.order && other.slug !== t.slug)
-        .slice(-3)
-        .map((other) => other.slug)
+      const related: string[] = []
+      const idx = t.order
+      if (idx > 1) related.push(this.parsedTopics[idx - 2].slug)
+      if (idx > 0) related.push(this.parsedTopics[idx - 1].slug)
+      if (idx < this.parsedTopics.length - 1) related.push(this.parsedTopics[idx + 1].slug)
 
       return {
         slug: t.slug,
