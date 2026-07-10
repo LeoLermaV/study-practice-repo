@@ -134,6 +134,11 @@ export function CategoryPageContent({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <h3 className="font-medium text-sm truncate">{topic.title}</h3>
+                          {topic.tags.includes('chapter-summary') && (
+                            <Badge variant="outline" className="text-[10px] shrink-0 rounded-full px-2 py-0 text-ink-faint border-ink-faint/30">
+                              recap
+                            </Badge>
+                          )}
                           <Badge variant="secondary" className="text-[10px] capitalize shrink-0 rounded-full px-2 py-0">
                             {topic.difficulty}
                           </Badge>

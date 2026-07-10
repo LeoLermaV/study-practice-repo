@@ -305,7 +305,7 @@ export class HelloAlgoAdapter implements SourceAdapter {
     const yaml = fs.readFileSync(mkdocsPath, 'utf-8')
     const allEntries = parseNavContents(yaml)
 
-    const sectionEntries = allEntries.filter((e) => e.sectionIndex > 0 || !e.file.endsWith('/summary.md'))
+    const sectionEntries = allEntries.filter((e) => !e.file.endsWith('/summary.md') && e.sectionIndex > 0)
     const summaryEntries = allEntries.filter((e) => e.file.endsWith('/summary.md'))
     const contentEntries = [...sectionEntries, ...summaryEntries]
 
@@ -360,7 +360,7 @@ export class HelloAlgoAdapter implements SourceAdapter {
         category: 'dsa',
         difficulty: CHAPTER_DIFFICULTY[entry.chapterIndex] ?? 'intermediate',
         estimatedReadingTime: readingTime,
-        tags: [...new Set([...baseTags, specificTag, 'hello-algo'])],
+        tags: [...new Set([...baseTags, specificTag, 'hello-algo', ...(entry.file.endsWith('/summary.md') ? ['chapter-summary'] : [])])],
         prerequisites: prereqs.filter(Boolean),
         relatedTopics: related.filter(Boolean),
         sourceRepos: [this.name],

@@ -223,11 +223,18 @@ function buildOrderedSlugs(category: string): string[] {
       const prefix = section.slugPrefix
       const matched = allFiles
         .filter((f) => f.slug.startsWith(prefix))
-        .sort((a, b) => a.slug.localeCompare(b.slug))
-      for (const f of matched) {
-        if (!seen.has(f.slug)) {
-          ordered.push(f.slug)
-          seen.add(f.slug)
+        .map((f) => ({ file: f, meta: readTopicMeta(category, f.slug) as TopicMeta | null }))
+        .filter(({ meta }) => meta != null && !meta.tags.includes('chapter-summary'))
+        .sort((a, b) => {
+          const aOrder = a.meta?.sortOrder ?? 999
+          const bOrder = b.meta?.sortOrder ?? 999
+          if (aOrder !== bOrder) return aOrder - bOrder
+          return a.file.slug.localeCompare(b.file.slug)
+        })
+      for (const { file } of matched) {
+        if (!seen.has(file.slug)) {
+          ordered.push(file.slug)
+          seen.add(file.slug)
         }
       }
     } else {
