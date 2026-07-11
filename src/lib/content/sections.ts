@@ -128,21 +128,31 @@ export const sectionsByCategory: Record<string, SectionDef[]> = {
     },
     {
       label: 'Python Practice — Easy',
-      description: 'Syntax refresher and practice problems grouped by Python concept. Covers loops, lists, strings, sets, dicts, sorting, stacks, and math tricks.',
-      slugPrefix: 'python-practice-easy-',
-      slugs: [],
+      description: 'Python fundamentals: loops, lists, strings, sets, dicts, digit manipulation, and built-in helpers.',
+      slugs: [
+        'python-practice-easy-loops-and-conditions',
+        'python-practice-easy-lists-and-comprehensions',
+        'python-practice-easy-string-operations',
+        'python-practice-easy-sets-and-predicates',
+        'python-practice-easy-dictionaries-and-counting',
+        'python-practice-easy-digit-manipulation',
+        'python-practice-easy-sorting-and-builtins',
+      ],
     },
     {
       label: 'Python Practice — Medium',
-      description: 'Intermediate Python practice problems building on the fundamentals. Add topics here as you level up.',
-      slugPrefix: 'python-practice-medium-',
-      slugs: [],
+      description: 'Early- to mid-pattern DSA concepts applied in Python: stacks and sliding window.',
+      slugs: [
+        'python-practice-easy-stacks',
+        'python-practice-medium-sliding-window',
+      ],
     },
     {
       label: 'Python Practice — Hard',
-      description: 'Advanced Python practice problems for mastery. Add topics here as needed.',
-      slugPrefix: 'python-practice-hard-',
-      slugs: [],
+      description: 'Late-pattern DSA concepts: bit manipulation, math, and geometry tricks.',
+      slugs: [
+        'python-practice-easy-bitwise-and-math',
+      ],
     },
     {
       label: 'LeetCode Hints',
