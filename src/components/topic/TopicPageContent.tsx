@@ -145,6 +145,10 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
         })()
       )}
 
+      <div className="mt-10 mb-10">
+        <ProgressToggles slug={slug} />
+      </div>
+
       <Separator className="my-10 bg-border/60" />
 
       <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2">
