@@ -12,9 +12,9 @@ npm run build     # Production build → out/
 ```
 
 ### Current state
-- **432 topics** across 5 categories: system-design (83), dsa (202), ddia (153), behavioral (11), cs-fundamentals (7)
-- **7 adapters** in `scripts/adapters/` ingest content from open-source repos
-- **444 pre-rendered static pages**, client-side search (MiniSearch), progress tracking (IndexedDB)
+- **472 topics** across 5 categories: system-design (80), dsa (221), ddia (153), behavioral (11), cs-fundamentals (7)
+- **10 adapters** in `scripts/adapters/` ingest content from open-source repos + hardcoded content
+- **Pre-rendered static pages**, client-side search (MiniSearch), progress tracking (IndexedDB with optional GitHub Gist sync)
 
 ### Key files
 | File | What it is |
@@ -25,14 +25,20 @@ npm run build     # Production build → out/
 | `scripts/adapters/base.ts` | `SourceAdapter` interface |
 | `src/components/layout/CategoryPage.tsx` | Sectioned category listing |
 | `src/components/topic/TopicPageContent.tsx` | Topic page + Quick Reference supplements |
+| `src/lib/progress/sync.ts` | GitHub Gist push/pull + auto-sync |
+| `src/lib/progress/merge.ts` | CRDT-style entry merge for sync |
+| `src/components/layout/SyncProvider.tsx` | Auto-sync hook (pull on mount, flush on hide) |
 
 ### Content sources
 | Adapter | Repo | Stars | Topics |
 |---------|------|:----:|:------:|
-| karan | karanpratapsingh/system-design | 44k | 59 |
-| hello-algo | krahets/hello-algo | 127k | 94 |
-| yangshun | yangshun/tech-interview-handbook | 140k | 36 |
-| donnemartin | donnemartin/system-design-primer | 353k | 30 |
-| neetcode | neetcode-gh/leetcode | 6.4k | 36 |
-| seanprashad | seanprashad/leetcode-patterns | 13k | 48 |
-| ddia | — (DDIA TOC) | — | 153 |
+| karan | karanpratapsingh/system-design | 44k | 59 SD |
+| hello-algo | krahets/hello-algo | 127k | 94 DS&A |
+| yangshun | yangshun/tech-interview-handbook | 140k | 11 BH + 7 CS + cheatsheets |
+| donnemartin | donnemartin/system-design-primer | 353k | 30 SD (16 hidden + 8 solutions + 6 OO) |
+| neetcode | neetcode-gh/leetcode | 6.4k | 36 DS&A |
+| seanprashad | seanprashad/leetcode-patterns | 13k | 48 DS&A |
+| ddia | — (DDIA TOC + ept/ddia-references) | — | 153 DDIA |
+| dsa-supplements | hardcoded | — | 8 DS&A |
+| python-practice | hardcoded | — | _ DS&A |
+| leetcode-hints | hardcoded | — | 25 DS&A |
