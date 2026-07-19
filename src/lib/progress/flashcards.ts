@@ -8,34 +8,24 @@ export interface FlashcardItem {
 
 export function buildFlashcardQueue(
   topics: TopicMeta[],
-  progress: ProgressEntry[],
-  maxNew = 5
+  progress: ProgressEntry[]
 ): FlashcardItem[] {
   const now = Date.now()
   const pmap = new Map(progress.map((p) => [p.slug, p]))
-  const queue: FlashcardItem[] = []
 
   const due: TopicMeta[] = []
   const studiedOnly: TopicMeta[] = []
   const readOnly: TopicMeta[] = []
-  const fresh: TopicMeta[] = []
 
   for (const t of topics) {
     const p = pmap.get(t.slug)
-    if (!p) {
-      fresh.push(t)
-      continue
-    }
-    if (p.practicedAt && p.nextReviewDue <= now) {
-      due.push(t)
-    } else if (p.practicedAt) {
-      // already practiced, not due — skip
+    if (!p) continue
+    if (p.practicedAt) {
+      if (p.nextReviewDue <= now) due.push(t)
     } else if (p.studiedAt) {
       studiedOnly.push(t)
     } else if (p.readAt) {
       readOnly.push(t)
-    } else {
-      fresh.push(t)
     }
   }
 
@@ -45,14 +35,8 @@ export function buildFlashcardQueue(
   due.sort(sort)
   studiedOnly.sort(sort)
   readOnly.sort(sort)
-  fresh.sort(sort).slice(0, maxNew)
 
-  queue.push(...due.map((t) => ({ topic: t })))
-  queue.push(...studiedOnly.map((t) => ({ topic: t })))
-  queue.push(...readOnly.map((t) => ({ topic: t })))
-  queue.push(...fresh.slice(0, maxNew).map((t) => ({ topic: t })))
-
-  return queue
+  return [...due, ...studiedOnly, ...readOnly].map((t) => ({ topic: t }))
 }
 
 const intervals = [1, 3, 7, 14, 30, 60]

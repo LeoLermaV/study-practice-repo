@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import type { TopicMeta, Category } from '@/lib/content/types'
-import { markRead, markStudied, markPracticed, addPracticeNote } from '@/lib/progress/db'
-import { buildFlashcardQueue, nextReviewDue, type FlashcardItem } from '@/lib/progress/flashcards'
+import { getProgress, markRead, markStudied, markPracticed, rateReview } from '@/lib/progress/db'
+import { buildFlashcardQueue, type FlashcardItem } from '@/lib/progress/flashcards'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BookOpen, ExternalLink, RotateCcw } from 'lucide-react'
@@ -46,7 +46,10 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
     const slug = item.topic.slug
     setRatings((prev) => [...prev, ease])
 
-    if (ease === 'again') {
+    const entry = await getProgress(slug)
+    if (entry?.practicedAt) {
+      await rateReview(slug, ease)
+    } else if (ease === 'again') {
       await markRead(slug)
     } else if (ease === 'hard' || ease === 'good') {
       await markStudied(slug)

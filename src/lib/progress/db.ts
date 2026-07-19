@@ -2,6 +2,7 @@ import { get, set, del, keys } from 'idb-keyval'
 import type { ProgressEntry, PracticeNote, StudyStats } from '../content/types'
 import { autoPush } from './sync'
 import { normalizeEntry } from './merge'
+import { nextReviewDue as easeReviewDue } from './flashcards'
 
 const PROGRESS_PREFIX = 'progress:'
 const STUDY_LOG_KEY = 'study-log'
@@ -137,6 +138,28 @@ export async function addPracticeNote(slug: string, text: string): Promise<Progr
   autoPush()
   return entry
 }
+export async function rateReview(
+  slug: string,
+  ease: 'again' | 'hard' | 'good' | 'easy'
+): Promise<ProgressEntry> {
+  const existing = await getProgress(slug)
+  if (!existing?.practicedAt) throw new Error('rateReview requires a practiced entry')
+  const now = Date.now()
+  // 'again' keeps reviewCount so the base interval doesn't grow through failures.
+  // practicedAt must move to now: merge gives the schedule to the latest practicedAt.
+  const rc = ease === 'again' ? existing.reviewCount : existing.reviewCount + 1
+  const entry: ProgressEntry = {
+    ...existing,
+    practicedAt: now,
+    reviewCount: rc,
+    nextReviewDue: easeReviewDue(rc, ease),
+  }
+  await setProgress(slug, entry)
+  await logStudyDay(now)
+  autoPush()
+  return entry
+}
+
 export async function removePracticeNote(slug: string, timestamp: number): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   if (!existing) throw new Error('No progress entry')

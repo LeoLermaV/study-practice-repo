@@ -1,21 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { TopicMeta, Category } from '@/lib/content/types'
+import type { TopicMeta, Category, ProgressEntry } from '@/lib/content/types'
+import { getAllProgress } from '@/lib/progress/db'
+import { buildFlashcardQueue } from '@/lib/progress/flashcards'
 import { CardDeck } from '@/components/flashcards/CardDeck'
 
 export default function FlashcardsPage() {
   const [topics, setTopics] = useState<TopicMeta[]>([])
+  const [progress, setProgress] = useState<ProgressEntry[]>([])
   const [category, setCategory] = useState<Category>('system-design')
   const [started, setStarted] = useState(false)
 
   useEffect(() => {
-    fetch('/search-index.json')
+    fetch('/topics-graph.json')
       .then((r) => r.json())
       .then((data) => {
-        if (data?.documents) setTopics(data.documents as TopicMeta[])
+        if (data?.nodes) setTopics(data.nodes as TopicMeta[])
       })
   }, [])
+
+  useEffect(() => {
+    if (!started) {
+      getAllProgress().then(setProgress)
+    }
+  }, [started])
 
   const filtered = topics.filter((t) => t.category === category)
   const catNames: Record<Category, string> = {
@@ -37,8 +46,10 @@ export default function FlashcardsPage() {
 
           <div className="grid gap-3 w-full max-w-sm mb-8">
             {(['system-design', 'ddia', 'dsa', 'cs-fundamentals', 'behavioral'] as Category[]).map((c) => {
-              const count = topics.filter((t) => t.category === c).length
-              if (count === 0) return null
+              const count = buildFlashcardQueue(
+                topics.filter((t) => t.category === c),
+                progress
+              ).length
               return (
                 <button
                   key={c}
@@ -46,14 +57,14 @@ export default function FlashcardsPage() {
                   className="flex items-center justify-between rounded-xl bg-card border border-border px-5 py-4 text-left hover:bg-secondary transition-colors duration-200"
                 >
                   <span className="font-medium">{catNames[c]}</span>
-                  <span className="text-xs text-ink-faint">{count} topics</span>
+                  <span className="text-xs text-ink-faint">{count} {count === 1 ? 'card' : 'cards'}</span>
                 </button>
               )
             })}
           </div>
 
           <p className="text-xs text-ink-faint max-w-sm text-center leading-relaxed">
-            Each topic becomes a flashcard. Rate your recall to schedule the next review.
+            Topics you mark as read or studied become flashcards. Rate your recall to schedule the next review.
             Use keyboard: <kbd className="px-1 py-0.5 rounded bg-secondary text-foreground text-[10px]">Space</kbd> to flip,{' '}
             <kbd className="px-1 py-0.5 rounded bg-secondary text-foreground text-[10px]">1-4</kbd> to rate.
           </p>
