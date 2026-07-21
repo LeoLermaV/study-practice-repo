@@ -39,7 +39,8 @@ async function ingestAdapter(adapter: SourceAdapter) {
     ensureDir(categoryDir)
 
     const body = await adapter.content(topic.slug)
-    const escaped = body.replace(/(?<!\\){/g, '\\{').replace(/(?<!\\)}/g, '\\}')
+    const bodyWithCode = convertIndentedCodeBlocks(body)
+    const escaped = escapeBraces(bodyWithCode)
     const mdx = `---\n${JSON.stringify(topic, null, 2)}\n---\n\n${escaped}`
     fs.writeFileSync(path.join(categoryDir, `${topic.slug}.mdx`), mdx)
 
@@ -50,6 +51,57 @@ async function ingestAdapter(adapter: SourceAdapter) {
       JSON.stringify(meta, null, 2)
     )
   }
+}
+
+function convertIndentedCodeBlocks(body: string): string {
+  const lines = body.split('\n')
+  const result: string[] = []
+  let inCodeBlock = false
+  let codeLines: string[] = []
+
+  function flushCode() {
+    if (codeLines.length > 0) {
+      result.push('```python')
+      result.push(...codeLines)
+      result.push('```')
+      codeLines = []
+    }
+    inCodeBlock = false
+  }
+
+  for (const line of lines) {
+    const isIndented = line.startsWith('    ')
+    const isEmpty = line.trim() === ''
+
+    if (isEmpty) {
+      if (inCodeBlock) {
+        codeLines.push('')
+      } else {
+        result.push(line)
+      }
+    } else if (isIndented) {
+      if (!inCodeBlock) {
+        inCodeBlock = true
+      }
+      codeLines.push(line.slice(4))
+    } else {
+      flushCode()
+      result.push(line)
+    }
+  }
+  flushCode()
+
+  return result.join('\n')
+}
+
+function escapeBraces(body: string): string {
+  const parts = body.split(/(```[\s\S]*?```)/)
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part
+      return part.replace(/(?<!\\){/g, '\\{').replace(/(?<!\\)}/g, '\\}')
+    })
+    .join('')
 }
 
 async function main() {
