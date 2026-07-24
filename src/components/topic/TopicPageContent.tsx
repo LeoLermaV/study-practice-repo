@@ -195,7 +195,7 @@ async function MDXBody({ slug, source }: { slug: string; source: string }) {
     source,
     options: {
       parseFrontmatter: false,
-      mdxOptions: { remarkPlugins: [remarkGfm] },
+      mdxOptions: { remarkPlugins: [remarkGfm], format: 'md' },
     },
     components: {
       a: (props: any) => {

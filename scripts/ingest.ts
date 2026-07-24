@@ -56,7 +56,9 @@ async function ingestAdapter(adapter: SourceAdapter) {
 function convertIndentedCodeBlocks(body: string): string {
   const lines = body.split('\n')
   const result: string[] = []
-  let inCodeBlock = false
+  let inIndentedBlock = false
+  let inFencedBlock = false
+  let fencedDelimiter = ''
   let codeLines: string[] = []
 
   function flushCode() {
@@ -66,22 +68,57 @@ function convertIndentedCodeBlocks(body: string): string {
       result.push('```')
       codeLines = []
     }
-    inCodeBlock = false
+    inIndentedBlock = false
+  }
+
+  function isFenceLine(line: string): boolean {
+    const trimmed = line.trimStart()
+    return trimmed.startsWith('```') || trimmed.startsWith('~~~')
+  }
+
+  function fenceDelimiter(line: string): string {
+    const trimmed = line.trimStart()
+    const match = trimmed.match(/^(`{3,}|~{3,})/)
+    return match ? match[1] : ''
+  }
+
+  function fenceClosed(delimiter: string): boolean {
+    return inFencedBlock && fencedDelimiter.length > 0
+      && delimiter.startsWith(fencedDelimiter)
   }
 
   for (const line of lines) {
+    if (isFenceLine(line)) {
+      const delim = fenceDelimiter(line)
+      if (!inFencedBlock) {
+        flushCode()
+        inFencedBlock = true
+        fencedDelimiter = delim
+      } else if (fenceClosed(delim)) {
+        inFencedBlock = false
+        fencedDelimiter = ''
+      }
+      result.push(line)
+      continue
+    }
+
+    if (inFencedBlock) {
+      result.push(line)
+      continue
+    }
+
     const isIndented = line.startsWith('    ')
     const isEmpty = line.trim() === ''
 
     if (isEmpty) {
-      if (inCodeBlock) {
+      if (inIndentedBlock) {
         codeLines.push('')
       } else {
         result.push(line)
       }
     } else if (isIndented) {
-      if (!inCodeBlock) {
-        inCodeBlock = true
+      if (!inIndentedBlock) {
+        inIndentedBlock = true
       }
       codeLines.push(line.slice(4))
     } else {
