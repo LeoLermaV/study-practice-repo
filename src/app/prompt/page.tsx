@@ -13,6 +13,8 @@ export default function PromptPage() {
     }}>
 {`You are my DSA coding coach.
 
+Browse the topic page the user linked to read the content before starting the exercises. Do not search the web — browse the exact URL provided in the user's message.
+
 ## Goal
 
 Your only goal is to make me fluent in writing correct, idiomatic code for data structures and algorithms.

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 
 interface AIPracticeButtonProps {
@@ -9,13 +10,20 @@ interface AIPracticeButtonProps {
 }
 
 export function AIPracticeButton({ topicTitle, category, slug }: AIPracticeButtonProps) {
+  const [copied, setCopied] = useState(false)
+
   const handleClick = () => {
     const origin = window.location.origin
     const promptUrl = `${origin}/prompt`
     const topicUrl = `${origin}/${category}/${slug}`
-    const message = `Go to ${promptUrl} and follow the instructions there. Also browse ${topicUrl} for the content I just studied. The topic is: ${topicTitle}`
+    const message = `Browse ${promptUrl} and follow the instructions there. Also browse ${topicUrl} for the topic content. The topic is: ${topicTitle}`
 
-    window.open(`https://chatgpt.com/?q=${encodeURIComponent(message)}`, '_blank')
+    navigator.clipboard.writeText(message).catch(() => {})
+
+    window.open('https://chatgpt.com/', '_blank')
+
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
   }
 
   return (
@@ -25,6 +33,11 @@ export function AIPracticeButton({ topicTitle, category, slug }: AIPracticeButto
     >
       <Sparkles className="h-4 w-4" />
       Practice with AI
+      {copied && (
+        <span className="text-xs text-foreground/60 animate-fade-in">
+          Prompt copied — paste into ChatGPT
+        </span>
+      )}
     </button>
   )
 }
