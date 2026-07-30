@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { buildAIPrompt } from '@/lib/ai-practice/coach-prompt'
 
@@ -10,17 +9,10 @@ interface AIPracticeButtonProps {
 }
 
 export function AIPracticeButton({ topicTitle, topicContent }: AIPracticeButtonProps) {
-  const [copied, setCopied] = useState(false)
-
   const handleClick = () => {
     const message = buildAIPrompt(topicTitle, topicContent)
 
-    navigator.clipboard.writeText(message).catch(() => {})
-
-    window.open('https://chatgpt.com/', '_blank')
-
-    setCopied(true)
-    setTimeout(() => setCopied(false), 3000)
+    window.open(`https://chatgpt.com/?q=${encodeURIComponent(message)}`, '_blank')
   }
 
   return (
@@ -30,11 +22,6 @@ export function AIPracticeButton({ topicTitle, topicContent }: AIPracticeButtonP
     >
       <Sparkles className="h-4 w-4" />
       Practice with AI
-      {copied && (
-        <span className="text-xs text-foreground/60 animate-fade-in">
-          Prompt copied — paste into ChatGPT
-        </span>
-      )}
     </button>
   )
 }
