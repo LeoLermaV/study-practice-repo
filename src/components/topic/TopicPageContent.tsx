@@ -78,7 +78,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
           tags={meta.tags}
         />
         <ProgressToggles slug={slug} />
-        <AIPracticeButton topicTitle={meta.title} topicContent={body} />
+        <AIPracticeButton topicTitle={meta.title} category={category} slug={slug} />
       </header>
 
       {meta.prerequisites.length > 0 && (

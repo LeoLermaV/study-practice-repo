@@ -2,18 +2,21 @@
 
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
-import { buildAIPrompt } from '@/lib/ai-practice/coach-prompt'
 
 interface AIPracticeButtonProps {
   topicTitle: string
-  topicContent: string
+  category: string
+  slug: string
 }
 
-export function AIPracticeButton({ topicTitle, topicContent }: AIPracticeButtonProps) {
+export function AIPracticeButton({ topicTitle, category, slug }: AIPracticeButtonProps) {
   const [copied, setCopied] = useState(false)
 
   const handleClick = () => {
-    const message = buildAIPrompt(topicTitle, topicContent)
+    const origin = window.location.origin
+    const promptUrl = `${origin}/prompt`
+    const topicUrl = `${origin}/${category}/${slug}`
+    const message = `Browse ${promptUrl} to get your coaching instructions. Then browse ${topicUrl} to read the topic content. The topic is: ${topicTitle}`
 
     navigator.clipboard.writeText(message).catch(() => {})
 
