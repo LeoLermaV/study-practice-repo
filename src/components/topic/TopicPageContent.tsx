@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
 import { readTopicMeta, getTopicFiles } from '@/lib/content/fs'
 import type { TopicMeta, Category } from '@/lib/content/types'
 import { TopicHeader } from '@/components/topic/TopicHeader'
+import { AIPracticeButton } from '@/components/topic/AIPracticeButton'
 import { ProgressToggles } from '@/components/progress/ProgressToggles'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -77,6 +78,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
           tags={meta.tags}
         />
         <ProgressToggles slug={slug} />
+        <AIPracticeButton topicTitle={meta.title} category={category} slug={slug} />
       </header>
 
       {meta.prerequisites.length > 0 && (
