@@ -1,13 +1,14 @@
-import { get, set, del, keys } from 'idb-keyval'
+import { get, set, keys } from 'idb-keyval'
 import type { ProgressEntry, PracticeNote, StudyStats } from '../content/types'
 import { autoPush } from './sync'
 import { normalizeEntry } from './merge'
-import { nextReviewDue as easeReviewDue } from './flashcards'
+import { isInRotation } from './queue'
+import { DEFAULT_EASE, backfillSchedule, initialSchedule, nextSchedule, type Rating } from './scheduler'
 
 const PROGRESS_PREFIX = 'progress:'
 const STUDY_LOG_KEY = 'study-log'
 
-const intervals = [1, 3, 7, 14, 30, 60]
+const DAY_MS = 86_400_000
 
 function migrateEntry(raw: unknown): ProgressEntry | undefined {
   if (!raw) return undefined
@@ -15,19 +16,24 @@ function migrateEntry(raw: unknown): ProgressEntry | undefined {
   if (entry.status !== undefined) {
     const now = (entry.lastStudied as number) ?? Date.now()
     const s = entry.status as string
+    const reviewCount = (entry.reviewCount as number) ?? 0
     return {
       slug: entry.slug as string,
       readAt: s !== 'not-started' ? now : null,
       studiedAt: ['understood', 'reviewed', 'mastered'].includes(s) ? now : null,
+      rotationRemovedAt: null,
       practicedAt: ['reviewed', 'mastered'].includes(s) ? now : null,
       practiceNotes: [],
-      reviewCount: (entry.reviewCount as number) ?? 0,
-      nextReviewDue: (entry.nextReviewDue as number) ?? (now + 86400000),
+      reviewCount,
+      nextReviewDue: (entry.nextReviewDue as number) ?? (now + DAY_MS),
       deletedNotes: [],
+      ease: DEFAULT_EASE,
+      intervalDays: 0,
+      reps: reviewCount,
     }
   }
   if (entry.readAt === undefined) return undefined
-  return normalizeEntry(entry as unknown as ProgressEntry)
+  return normalizeEntry(backfillSchedule(entry as unknown as ProgressEntry))
 }
 
 export async function getProgress(slug: string): Promise<ProgressEntry | undefined> {
@@ -56,103 +62,113 @@ async function logStudyDay(timestamp: number) {
   }
 }
 
-function nextDue(reviewCount: number): number {
-  const idx = Math.min(reviewCount, intervals.length - 1)
-  return Date.now() + intervals[idx] * 86400000
+function freshEntry(slug: string, now: number): ProgressEntry {
+  const { ease, intervalDays, reps } = initialSchedule(now)
+  return {
+    slug,
+    readAt: null,
+    studiedAt: null,
+    rotationRemovedAt: null,
+    practicedAt: null,
+    practiceNotes: [],
+    reviewCount: 0,
+    nextReviewDue: 0,
+    deletedNotes: [],
+    ease,
+    intervalDays,
+    reps,
+  }
 }
 
 export async function markRead(slug: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
   if (existing?.readAt) return existing
-  const entry: ProgressEntry = {
-    slug,
-    readAt: now,
-    studiedAt: existing?.studiedAt ?? null,
-    practicedAt: existing?.practicedAt ?? null,
-    practiceNotes: existing?.practiceNotes ?? [],
-    reviewCount: existing?.reviewCount ?? 0,
-    nextReviewDue: existing?.nextReviewDue ?? (now + 86400000),
-    deletedNotes: existing?.deletedNotes ?? [],
-  }
+  const entry: ProgressEntry = { ...(existing ?? freshEntry(slug, now)), slug, readAt: now }
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
   return entry
 }
+
+/** Adds the topic to the review rotation. First review lands tomorrow. */
 export async function markStudied(slug: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
-  if (existing?.studiedAt) return existing
+  if (isInRotation(existing)) return existing!
+  const base = existing ?? freshEntry(slug, now)
   const entry: ProgressEntry = {
+    ...base,
     slug,
-    readAt: existing?.readAt ?? now,
+    readAt: base.readAt ?? now,
     studiedAt: now,
-    practicedAt: existing?.practicedAt ?? null,
-    practiceNotes: existing?.practiceNotes ?? [],
-    reviewCount: existing?.reviewCount ?? 0,
-    nextReviewDue: existing?.nextReviewDue ?? (now + 86400000),
-    deletedNotes: existing?.deletedNotes ?? [],
+    nextReviewDue: now + DAY_MS,
+    intervalDays: 1,
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
   return entry
 }
-export async function markPracticed(slug: string): Promise<ProgressEntry> {
+
+/**
+ * Undo for a mistaken "Add to review". Tombstoned rather than cleared, so a
+ * device that still has the topic in rotation cannot resurrect it on sync.
+ * Reading history and notes are kept; only rotation membership changes.
+ */
+export async function removeFromRotation(slug: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
-  const rc = (existing?.reviewCount ?? 0) + 1
+  const base = existing ?? freshEntry(slug, now)
+  const entry: ProgressEntry = { ...base, slug, rotationRemovedAt: now }
+  await setProgress(slug, entry)
+  autoPush()
+  return entry
+}
+
+/**
+ * Records a recall rating and reschedules via SM-2. Safe to call on a topic
+ * that was never explicitly added to the rotation — it joins on first rating.
+ */
+export async function rateReview(slug: string, rating: Rating): Promise<ProgressEntry> {
+  const existing = await getProgress(slug)
+  const now = Date.now()
+  const base = existing ?? freshEntry(slug, now)
+  const schedule = nextSchedule(base, rating, now)
   const entry: ProgressEntry = {
+    ...base,
     slug,
-    readAt: existing?.readAt ?? now,
-    studiedAt: existing?.studiedAt ?? now,
+    readAt: base.readAt ?? now,
+    studiedAt: base.studiedAt ?? now,
     practicedAt: now,
-    practiceNotes: existing?.practiceNotes ?? [],
-    reviewCount: rc,
-    nextReviewDue: nextDue(rc),
-    deletedNotes: existing?.deletedNotes ?? [],
+    reviewCount: base.reviewCount + (rating === 'again' ? 0 : 1),
+    nextReviewDue: schedule.dueAt,
+    ease: schedule.ease,
+    intervalDays: schedule.intervalDays,
+    reps: schedule.reps,
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
   return entry
 }
+
+export async function markPracticed(slug: string): Promise<ProgressEntry> {
+  return rateReview(slug, 'good')
+}
+
+/** Notes are annotations only — they no longer disturb the review schedule. */
 export async function addPracticeNote(slug: string, text: string): Promise<ProgressEntry> {
   const existing = await getProgress(slug)
   const now = Date.now()
+  const base = existing ?? freshEntry(slug, now)
   const note: PracticeNote = { text, timestamp: now }
-  const rc = (existing?.reviewCount ?? 0) + 1
   const entry: ProgressEntry = {
+    ...base,
     slug,
-    readAt: existing?.readAt ?? now,
-    studiedAt: existing?.studiedAt ?? now,
-    practicedAt: existing?.practicedAt ?? now,
-    practiceNotes: [...(existing?.practiceNotes ?? []), note],
-    reviewCount: rc,
-    nextReviewDue: nextDue(rc),
-    deletedNotes: existing?.deletedNotes ?? [],
-  }
-  await setProgress(slug, entry)
-  await logStudyDay(now)
-  autoPush()
-  return entry
-}
-export async function rateReview(
-  slug: string,
-  ease: 'again' | 'hard' | 'good' | 'easy'
-): Promise<ProgressEntry> {
-  const existing = await getProgress(slug)
-  if (!existing?.practicedAt) throw new Error('rateReview requires a practiced entry')
-  const now = Date.now()
-  // 'again' keeps reviewCount so the base interval doesn't grow through failures.
-  // practicedAt must move to now: merge gives the schedule to the latest practicedAt.
-  const rc = ease === 'again' ? existing.reviewCount : existing.reviewCount + 1
-  const entry: ProgressEntry = {
-    ...existing,
-    practicedAt: now,
-    reviewCount: rc,
-    nextReviewDue: easeReviewDue(rc, ease),
+    readAt: base.readAt ?? now,
+    studiedAt: base.studiedAt ?? now,
+    practiceNotes: [...base.practiceNotes, note],
   }
   await setProgress(slug, entry)
   await logStudyDay(now)
@@ -178,7 +194,7 @@ export async function removePracticeNote(slug: string, timestamp: number): Promi
 export async function getDueTopics(): Promise<ProgressEntry[]> {
   const all = await getAllProgress()
   const now = Date.now()
-  return all.filter((e) => e.nextReviewDue <= now && e.practicedAt !== null)
+  return all.filter((e) => isInRotation(e) && e.nextReviewDue <= now)
 }
 
 export async function getStudyStats(): Promise<StudyStats> {
@@ -194,7 +210,7 @@ export async function getStudyStats(): Promise<StudyStats> {
 
   for (const e of all) {
     if (e.readAt) totalRead++
-    if (e.studiedAt) totalStudied++
+    if (isInRotation(e)) totalStudied++
     if (e.practicedAt) totalPracticed++
 
     const timestamps = [
@@ -220,7 +236,7 @@ export async function getStudyStats(): Promise<StudyStats> {
     totalRead,
     totalStudied,
     totalPracticed,
-    topicsDueForReview: all.filter((e) => e.nextReviewDue <= now && e.practicedAt !== null).length,
+    topicsDueForReview: all.filter((e) => isInRotation(e) && e.nextReviewDue <= now).length,
     recentlyStudied: touched.slice(0, 10),
   }
 }

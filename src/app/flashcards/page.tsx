@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import type { TopicMeta, Category, ProgressEntry } from '@/lib/content/types'
 import { getAllProgress } from '@/lib/progress/db'
-import { buildFlashcardQueue } from '@/lib/progress/flashcards'
+import { buildQueue } from '@/lib/progress/queue'
+import { assetPath } from '@/lib/utils'
 import { CardDeck } from '@/components/flashcards/CardDeck'
 
 export default function FlashcardsPage() {
@@ -11,13 +12,15 @@ export default function FlashcardsPage() {
   const [progress, setProgress] = useState<ProgressEntry[]>([])
   const [category, setCategory] = useState<Category>('system-design')
   const [started, setStarted] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   useEffect(() => {
-    fetch('/topics-graph.json')
+    fetch(assetPath('/topics-graph.json'))
       .then((r) => r.json())
       .then((data) => {
         if (data?.nodes) setTopics(data.nodes as TopicMeta[])
       })
+      .catch(() => setLoadFailed(true))
   }, [])
 
   useEffect(() => {
@@ -44,11 +47,18 @@ export default function FlashcardsPage() {
             Study with spaced repetition. Choose a category to begin.
           </p>
 
+          {loadFailed && (
+            <p className="mb-6 max-w-sm text-center text-sm text-red-500">
+              Could not load topics — card counts below are unavailable, not zero.
+            </p>
+          )}
+
           <div className="grid gap-3 w-full max-w-sm mb-8">
             {(['system-design', 'ddia', 'dsa', 'cs-fundamentals', 'behavioral'] as Category[]).map((c) => {
-              const count = buildFlashcardQueue(
+              const count = buildQueue(
                 topics.filter((t) => t.category === c),
-                progress
+                progress,
+                { mode: 'review' }
               ).length
               return (
                 <button
@@ -64,7 +74,7 @@ export default function FlashcardsPage() {
           </div>
 
           <p className="text-xs text-ink-faint max-w-sm text-center leading-relaxed">
-            Topics you mark as read or studied become flashcards. Rate your recall to schedule the next review.
+            Topics you add to review appear here when they fall due. Rate your recall to schedule the next one.
             Use keyboard: <kbd className="px-1 py-0.5 rounded bg-secondary text-foreground text-[10px]">Space</kbd> to flip,{' '}
             <kbd className="px-1 py-0.5 rounded bg-secondary text-foreground text-[10px]">1-4</kbd> to rate.
           </p>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getStudyStats, getAllProgress } from '@/lib/progress/db'
 import type { StudyStats, TopicMeta, Category } from '@/lib/content/types'
-import { buildDailyQueue, type QueueItem } from '@/lib/progress/queue'
+import { buildQueue, type QueueItem } from '@/lib/progress/queue'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BrandMark } from '@/components/layout/BrandMark'
@@ -67,7 +67,7 @@ export function HomeClient({ topics }: { topics: TopicMeta[] }) {
   useEffect(() => {
     getStudyStats().then(setStats)
     getAllProgress().then((progress) => {
-      setQueue(buildDailyQueue(topics, progress))
+      setQueue(buildQueue(topics, progress, { mode: 'daily' }))
     })
   }, [topics])
 

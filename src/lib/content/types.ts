@@ -46,12 +46,19 @@ export interface PracticeNote {
 export interface ProgressEntry {
   slug: string
   readAt: number | null
+  /** When the topic was last added to the review rotation. */
   studiedAt: number | null
+  /** Tombstone for leaving the rotation. Later than studiedAt means "not in it". */
+  rotationRemovedAt: number | null
   practicedAt: number | null
   practiceNotes: PracticeNote[]
   reviewCount: number
   nextReviewDue: number
   deletedNotes: number[]
+  // v2 scheduling — see lib/progress/scheduler.ts. Backfilled by migrateEntry.
+  ease: number
+  intervalDays: number
+  reps: number
 }
 
 export interface StudyStats {

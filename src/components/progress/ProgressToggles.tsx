@@ -1,12 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { ProgressEntry, PracticeNote } from '@/lib/content/types'
-import { getProgress, markRead, markStudied, markPracticed, addPracticeNote, removePracticeNote } from '@/lib/progress/db'
+import type { ProgressEntry } from '@/lib/content/types'
+import { getProgress, markStudied, removeFromRotation, rateReview, addPracticeNote, removePracticeNote } from '@/lib/progress/db'
+import { isInRotation } from '@/lib/progress/queue'
+import type { Rating } from '@/lib/progress/scheduler'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { Eye, BookMarked, CheckCircle, Plus, X } from 'lucide-react'
+import { BookMarked, Plus, Undo2, X } from 'lucide-react'
+
+const DAY_MS = 86_400_000
+
+const RATINGS: { rating: Rating; label: string; className: string }[] = [
+  { rating: 'again', label: 'Forgot', className: 'bg-red-500/10 text-red-500 hover:bg-red-500/20' },
+  { rating: 'hard', label: 'Shaky', className: 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20' },
+  { rating: 'good', label: 'Solid', className: 'bg-green-500/10 text-green-500 hover:bg-green-500/20' },
+  { rating: 'easy', label: 'Easy', className: 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' },
+]
+
+function dueLabel(nextReviewDue: number, now: number): string {
+  const days = Math.round((nextReviewDue - now) / DAY_MS)
+  if (days <= 0) return 'Due for review — how well did you remember it?'
+  if (days === 1) return 'In review · due tomorrow'
+  return `In review · due in ${days} days`
+}
 
 interface ProgressTogglesProps {
   slug: string
@@ -14,6 +32,7 @@ interface ProgressTogglesProps {
 
 export function ProgressToggles({ slug }: ProgressTogglesProps) {
   const [entry, setEntry] = useState<ProgressEntry | null>(null)
+  const [now, setNow] = useState(0)
   const [loading, setLoading] = useState(true)
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [noteText, setNoteText] = useState('')
@@ -22,30 +41,23 @@ export function ProgressToggles({ slug }: ProgressTogglesProps) {
   useEffect(() => {
     getProgress(slug).then((e) => {
       setEntry(e ?? null)
+      setNow(Date.now())
       setLoading(false)
     })
   }, [slug])
 
-  const handleRead = async () => {
-    const result = await markRead(slug)
-    setEntry(result)
+  // `now` is captured once on load; the returned entry carries the new due date,
+  // so the label stays correct without re-reading the clock during a handler.
+  const handleAddToReview = async () => {
+    setEntry(await markStudied(slug))
   }
 
-  const handleStudied = async () => {
-    const result = await markStudied(slug)
-    setEntry(result)
+  const handleRate = async (rating: Rating) => {
+    setEntry(await rateReview(slug, rating))
   }
 
-  const handlePracticed = async () => {
-    const result = await markPracticed(slug)
-    setEntry(result)
-    setNoteText('')
-    setNoteDialogOpen(true)
-  }
-
-  const handleAddNote = () => {
-    setNoteText('')
-    setNoteDialogOpen(true)
+  const handleRemove = async () => {
+    setEntry(await removeFromRotation(slug))
   }
 
   const handleSaveNote = async () => {
@@ -60,42 +72,57 @@ export function ProgressToggles({ slug }: ProgressTogglesProps) {
   }
 
   const handleDeleteNote = async (timestamp: number) => {
-    const result = await removePracticeNote(slug, timestamp)
-    setEntry(result)
+    setEntry(await removePracticeNote(slug, timestamp))
   }
 
-  if (loading) return <div className="h-8 w-64 animate-pulse rounded bg-muted" />
+  if (loading) return <div className="h-9 w-64 animate-pulse rounded bg-muted" />
 
-  const read = !!entry?.readAt
-  const studied = !!entry?.studiedAt
-  const practiced = !!entry?.practicedAt
+  const inRotation = isInRotation(entry ?? undefined)
   const notes = entry?.practiceNotes ?? []
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2">
-
-        <ToggleButton active={read} color="text-blue-500" borderColor="border-blue-500" onClick={handleRead}>
-          <Eye className="h-3.5 w-3.5" />
-          Read
-        </ToggleButton>
-
-        <ToggleButton active={studied} color="text-amber-500" borderColor="border-amber-500" onClick={handleStudied}>
+      {!inRotation ? (
+        <button
+          onClick={handleAddToReview}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-4 py-2 text-xs font-medium text-brand transition-[color,background-color,border-color,transform] duration-200 hover:border-brand/60 hover:bg-brand/15 active:scale-[0.97]"
+        >
           <BookMarked className="h-3.5 w-3.5" />
-          Studied
-        </ToggleButton>
+          Add to review
+        </button>
+      ) : (
+        <div>
+          <p className="mb-2 text-xs text-ink-faint">{dueLabel(entry!.nextReviewDue, now)}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {RATINGS.map(({ rating, label, className }) => (
+              <button
+                key={rating}
+                onClick={() => handleRate(rating)}
+                className={`inline-flex min-h-9 items-center rounded-full px-4 py-2 text-xs font-medium transition-[color,background-color,transform] duration-200 active:scale-[0.97] ${className}`}
+              >
+                {label}
+              </button>
+            ))}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => { setNoteText(''); setNoteDialogOpen(true) }}
+              className="text-muted-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
 
-        <ToggleButton active={practiced} color="text-emerald-500" borderColor="border-emerald-500" onClick={handlePracticed}>
-          <CheckCircle className="h-3.5 w-3.5" />
-          Practiced
-        </ToggleButton>
-
-        {practiced && (
-          <Button variant="ghost" size="icon-sm" onClick={handleAddNote} className="text-muted-foreground">
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
+            <button
+              onClick={handleRemove}
+              title="Remove this topic from the review rotation"
+              className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-2 text-xs text-ink-faint transition-colors duration-200 hover:text-foreground"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
 
       {notes.length > 0 && (
         <div className="mt-2 space-y-1">
@@ -116,16 +143,16 @@ export function ProgressToggles({ slug }: ProgressTogglesProps) {
       <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Practice Note</DialogTitle>
+            <DialogTitle>Note</DialogTitle>
           </DialogHeader>
           <Textarea
-            placeholder="What did you practice? (LeetCode link, problem name, mock interview notes...)"
+            placeholder="Anything worth remembering next time you review this..."
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
             rows={3}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>Skip</Button>
+            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveNote} disabled={!noteText.trim() || noteLoading}>
               {noteLoading ? 'Saving...' : 'Save'}
             </Button>
@@ -133,32 +160,5 @@ export function ProgressToggles({ slug }: ProgressTogglesProps) {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-function ToggleButton({
-  active,
-  color,
-  borderColor,
-  onClick,
-  children,
-}: {
-  active: boolean
-  color: string
-  borderColor: string
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.97] ${
-        active
-          ? `${color} border-${borderColor.replace('border-', '')} bg-secondary`
-          : 'border-border text-muted-foreground hover:border-ink-faint/60 hover:text-foreground'
-      }`}
-    >
-      {children}
-    </button>
   )
 }

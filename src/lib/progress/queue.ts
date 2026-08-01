@@ -1,65 +1,96 @@
 import type { TopicMeta, ProgressEntry } from '../content/types'
 
+export type QueueReason = 'review' | 'study' | 'new'
+export type QueueMode = 'daily' | 'review'
+
 export interface QueueItem {
   topic: TopicMeta
-  reason: 'review' | 'practice' | 'study' | 'new'
+  reason: QueueReason
+}
+
+export interface QueueOptions {
+  mode?: QueueMode
+  limit?: number
+  now?: number
 }
 
 const difficultyRank = { beginner: 0, intermediate: 1, advanced: 2 }
 
-export function buildDailyQueue(
+/**
+ * In the rotation if it was added and not subsequently removed. Comparing the
+ * two timestamps (rather than clearing studiedAt) keeps add/remove/re-add
+ * resolvable when two devices disagree.
+ */
+export function isInRotation(entry: ProgressEntry | undefined): boolean {
+  if (!entry?.studiedAt) return false
+  return entry.rotationRemovedAt === null || entry.studiedAt > entry.rotationRemovedAt
+}
+
+/**
+ * Single source of truth for "what should I work on".
+ *
+ * `daily` (home page) reserves a slot for unrotated and new material so a large
+ * review backlog cannot freeze the list. `review` returns every due topic.
+ */
+export function buildQueue(
   topics: TopicMeta[],
   progress: ProgressEntry[],
-  maxItems = 5
+  options: QueueOptions = {}
 ): QueueItem[] {
-  const now = Date.now()
+  const { mode = 'daily', limit = 5, now = Date.now() } = options
   const pmap = new Map(progress.map((p) => [p.slug, p]))
-  const queue: QueueItem[] = []
 
-  const unread: TopicMeta[] = []
-  const readOnly: TopicMeta[] = []
-  const studiedOnly: TopicMeta[] = []
-  const practicedDue: TopicMeta[] = []
+  const due: { topic: TopicMeta; dueAt: number }[] = []
+  const unrotated: { topic: TopicMeta; readAt: number }[] = []
+  const fresh: TopicMeta[] = []
 
-  for (const t of topics) {
-    const p = pmap.get(t.slug)
-    if (!p) {
-      unread.push(t)
-      continue
-    }
-    if (p.practicedAt && p.nextReviewDue <= now && p.readAt) {
-      practicedDue.push(t)
-    } else if (p.practicedAt) {
-      // already practiced, not due — skip
-    } else if (p.studiedAt) {
-      studiedOnly.push(t)
-    } else if (p.readAt) {
-      readOnly.push(t)
+  for (const topic of topics) {
+    const entry = pmap.get(topic.slug)
+    if (!entry) {
+      fresh.push(topic)
+    } else if (isInRotation(entry)) {
+      if (entry.nextReviewDue <= now) due.push({ topic, dueAt: entry.nextReviewDue })
+    } else if (entry.readAt) {
+      unrotated.push({ topic, readAt: entry.readAt })
     } else {
-      unread.push(t)
+      fresh.push(topic)
     }
   }
 
-  const sortByDifficulty = (a: TopicMeta, b: TopicMeta) =>
-    (difficultyRank[a.difficulty] ?? 0) - (difficultyRank[b.difficulty] ?? 0)
+  // Most overdue first: reviewing the head pushes it back, so the list rotates.
+  due.sort((a, b) => a.dueAt - b.dueAt)
+  unrotated.sort((a, b) => a.readAt - b.readAt)
 
-  practicedDue.sort(sortByDifficulty)
-  studiedOnly.sort(sortByDifficulty)
-  readOnly.sort(sortByDifficulty)
-
-  queue.push(...practicedDue.map((t) => ({ topic: t, reason: 'review' as const })))
-  queue.push(...studiedOnly.map((t) => ({ topic: t, reason: 'practice' as const })))
-  queue.push(...readOnly.map((t) => ({ topic: t, reason: 'study' as const })))
-
-  if (queue.length < maxItems) {
-    const completedSlugs = new Set(
-      progress.filter((p) => p.readAt !== null).map((p) => p.slug)
-    )
-    const ready = unread
-      .filter((t) => t.prerequisites.length === 0 || t.prerequisites.some((p) => completedSlugs.has(p)))
-      .sort(sortByDifficulty)
-    queue.push(...ready.map((t) => ({ topic: t, reason: 'new' as const })))
+  if (mode === 'review') {
+    return due.map(({ topic }) => ({ topic, reason: 'review' }))
   }
 
-  return queue.slice(0, maxItems)
+  const reviewSlots = Math.max(1, limit - 1)
+  const queue: QueueItem[] = due
+    .slice(0, reviewSlots)
+    .map(({ topic }) => ({ topic, reason: 'review' as const }))
+
+  for (const { topic } of unrotated) {
+    if (queue.length >= limit) break
+    queue.push({ topic, reason: 'study' })
+  }
+
+  if (queue.length < limit) {
+    const started = new Set(progress.filter((p) => p.readAt !== null).map((p) => p.slug))
+    const ready = fresh
+      .filter((t) => t.prerequisites.length === 0 || t.prerequisites.some((p) => started.has(p)))
+      .sort((a, b) => (difficultyRank[a.difficulty] ?? 0) - (difficultyRank[b.difficulty] ?? 0))
+    for (const topic of ready) {
+      if (queue.length >= limit) break
+      queue.push({ topic, reason: 'new' })
+    }
+  }
+
+  // Nothing else to show: fall back to the rest of the review backlog.
+  for (const { topic } of due.slice(reviewSlots)) {
+    if (queue.length >= limit) break
+    queue.push({ topic, reason: 'review' })
+  }
+
+  return queue.slice(0, limit)
 }

@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import type { TopicMeta, Category } from '@/lib/content/types'
-import { getProgress, markRead, markStudied, markPracticed, rateReview } from '@/lib/progress/db'
-import { buildFlashcardQueue, type FlashcardItem } from '@/lib/progress/flashcards'
+import { rateReview } from '@/lib/progress/db'
+import { buildQueue, type QueueItem } from '@/lib/progress/queue'
+import type { Rating } from '@/lib/progress/scheduler'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BookOpen, ExternalLink, RotateCcw } from 'lucide-react'
@@ -24,7 +25,7 @@ interface CardDeckProps {
 }
 
 export function CardDeck({ topics, category, onBack }: CardDeckProps) {
-  const [queue, setQueue] = useState<FlashcardItem[]>([])
+  const [queue, setQueue] = useState<QueueItem[]>([])
   const [current, setCurrent] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
@@ -34,28 +35,17 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
   useEffect(() => {
     import('@/lib/progress/db').then(({ getAllProgress }) => {
       getAllProgress().then((progress) => {
-        setQueue(buildFlashcardQueue(topics, progress))
+        setQueue(buildQueue(topics, progress, { mode: 'review' }))
       })
     })
   }, [topics])
 
-  const handleRate = useCallback(async (ease: 'again' | 'hard' | 'good' | 'easy') => {
+  const handleRate = useCallback(async (rating: Rating) => {
     const item = queue[current]
     if (!item) return
 
-    const slug = item.topic.slug
-    setRatings((prev) => [...prev, ease])
-
-    const entry = await getProgress(slug)
-    if (entry?.practicedAt) {
-      await rateReview(slug, ease)
-    } else if (ease === 'again') {
-      await markRead(slug)
-    } else if (ease === 'hard' || ease === 'good') {
-      await markStudied(slug)
-    } else {
-      await markPracticed(slug)
-    }
+    setRatings((prev) => [...prev, rating])
+    await rateReview(item.topic.slug, rating)
 
     if (current < queue.length - 1) {
       setCurrent((c) => c + 1)
