@@ -11,6 +11,7 @@ import {
   CommandItem,
 } from '@/components/ui/command'
 import type { TopicMeta } from '@/lib/content/types'
+import { assetPath } from '@/lib/utils'
 import { BookOpen, BookText, Code2, Cpu, Users } from 'lucide-react'
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -46,11 +47,12 @@ export function CommandPalette() {
   }, [])
 
   useEffect(() => {
-    fetch('/search-index.json')
+    fetch(assetPath('/search-index.json'))
       .then((r) => r.json())
       .then((data) => {
         if (data?.documents) setTopics(data.documents as TopicMeta[])
       })
+      .catch(() => setTopics([]))
   }, [])
 
   const grouped = topics.reduce<Record<string, TopicMeta[]>>((acc, t) => {

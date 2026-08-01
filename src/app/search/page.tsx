@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import MiniSearch from 'minisearch'
 import type { TopicMeta, Category } from '@/lib/content/types'
+import { assetPath } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +24,7 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/search-index.json')
+    fetch(assetPath('/search-index.json'))
       .then((r) => r.json())
       .then((data) => {
         if (data?.documents) {
@@ -41,7 +42,7 @@ export default function SearchPage() {
 
   const handleSearch = useCallback((value: string) => {
     setQuery(value)
-    fetch('/search-index.json')
+    fetch(assetPath('/search-index.json'))
       .then((r) => r.json())
       .then((data) => {
         if (!data?.documents) return

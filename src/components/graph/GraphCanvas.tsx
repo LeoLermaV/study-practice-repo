@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { TopicNode, type TopicNodeData } from './TopicNode'
+import { assetPath } from '@/lib/utils'
 
 const CATEGORY_COLORS: Record<string, string> = {
   'system-design': '#0099ff',
@@ -132,7 +133,7 @@ export function GraphCanvas() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/topics-graph.json')
+    fetch(assetPath('/topics-graph.json'))
       .then((r) => r.json())
       .then((data: RawGraphData) => setRaw(data))
       .catch(() => setRaw(null))

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { get } from 'idb-keyval'
 import { getStudyStats, getAllProgress } from '@/lib/progress/db'
 import type { StudyStats, ProgressEntry, TopicMeta, Category } from '@/lib/content/types'
+import { assetPath } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Flame, BookOpen, TrendingUp, RefreshCw } from 'lucide-react'
 
@@ -65,7 +66,7 @@ export default function ProgressPage() {
     })
     getAllProgress().then(setAllProgress)
 
-    fetch('/topics-graph.json')
+    fetch(assetPath('/topics-graph.json'))
       .then((res) => res.json())
       .then((data: { nodes: TopicMeta[] }) => {
         setTopicIndex(new Map(data.nodes.map((n) => [n.slug, n])))
