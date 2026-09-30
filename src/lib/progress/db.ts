@@ -1,6 +1,8 @@
 import { get, set, keys } from 'idb-keyval'
 import type { ProgressEntry, PracticeNote, StudyStats } from '../content/types'
 import { autoPush } from './sync'
+import { notifyProgressChanged } from './events'
+import { streakFromDates } from './streak'
 import { normalizeEntry } from './merge'
 import { isInRotation } from './queue'
 import { DEFAULT_EASE, backfillSchedule, initialSchedule, nextSchedule, type Rating } from './scheduler'
@@ -88,6 +90,7 @@ export async function markRead(slug: string): Promise<ProgressEntry> {
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -108,6 +111,7 @@ export async function markStudied(slug: string): Promise<ProgressEntry> {
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -123,6 +127,7 @@ export async function removeFromRotation(slug: string): Promise<ProgressEntry> {
   const entry: ProgressEntry = { ...base, slug, rotationRemovedAt: now }
   await setProgress(slug, entry)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -150,6 +155,7 @@ export async function rateReview(slug: string, rating: Rating): Promise<Progress
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -173,6 +179,7 @@ export async function addPracticeNote(slug: string, text: string): Promise<Progr
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -188,6 +195,7 @@ export async function removePracticeNote(slug: string, timestamp: number): Promi
   }
   await setProgress(slug, entry)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -243,18 +251,5 @@ export async function getStudyStats(): Promise<StudyStats> {
 
 async function calculateStreak(): Promise<number> {
   const dates: string[] = await get(STUDY_LOG_KEY) ?? []
-  if (dates.length === 0) return 0
-  const unique = [...new Set(dates)].sort().reverse()
-  let streak = 1
-  for (let i = 1; i < unique.length; i++) {
-    const prev = new Date(unique[i - 1])
-    const curr = new Date(unique[i])
-    const diffDays = (prev.getTime() - curr.getTime()) / 86400000
-    if (Math.round(diffDays) === 1) {
-      streak++
-    } else {
-      break
-    }
-  }
-  return streak
+  return streakFromDates(dates, Date.now())
 }

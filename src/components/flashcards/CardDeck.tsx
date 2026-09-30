@@ -6,17 +6,12 @@ import type { TopicMeta, Category } from '@/lib/content/types'
 import { rateReview } from '@/lib/progress/db'
 import { buildQueue, type QueueItem } from '@/lib/progress/queue'
 import type { Rating } from '@/lib/progress/scheduler'
+import { categoryShortTitles } from '@/lib/content/sections'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BookOpen, ExternalLink, RotateCcw } from 'lucide-react'
 
-const categoryNames: Record<string, string> = {
-  'system-design': 'System Design',
-  dsa: 'DS&A',
-  ddia: 'DDIA',
-  'cs-fundamentals': 'CS Fundamentals',
-  behavioral: 'Behavioral',
-}
+const RATING_LABELS: Record<Rating, string> = { again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy' }
 
 interface CardDeckProps {
   topics: TopicMeta[]
@@ -30,7 +25,8 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
   const [flipped, setFlipped] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [ratings, setRatings] = useState<string[]>([])
-  const [startTime] = useState(Date.now())
+  const [startTime] = useState(() => Date.now())
+  const [endTime, setEndTime] = useState<number | null>(null)
 
   useEffect(() => {
     import('@/lib/progress/db').then(({ getAllProgress }) => {
@@ -51,6 +47,7 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
       setCurrent((c) => c + 1)
       setFlipped(false)
     } else {
+      setEndTime(Date.now())
       setShowSummary(true)
     }
   }, [current, queue])
@@ -76,38 +73,24 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
   }, [handleRate, showSummary, current])
 
   if (showSummary) {
-    const elapsed = Math.round((Date.now() - startTime) / 1000)
+    const elapsed = Math.round(((endTime ?? startTime) - startTime) / 1000)
     const mins = Math.floor(elapsed / 60)
     const secs = elapsed % 60
-    const agains = ratings.filter((r) => r === 'again').length
-    const hards = ratings.filter((r) => r === 'hard').length
-    const goods = ratings.filter((r) => r === 'good').length
-    const easys = ratings.filter((r) => r === 'easy').length
 
     return (
       <div className="flex flex-col items-center justify-center py-10 animate-fade-in">
-        <h2 className="text-2xl font-bold tracking-tight mb-2">Session Complete</h2>
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight">Session complete</h2>
         <p className="text-muted-foreground text-sm mb-8">
           {queue.length} cards in {mins}m {secs.toString().padStart(2, '0')}s
         </p>
 
-        <div className="flex gap-4 mb-8">
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm font-bold text-red-500">{agains}</span>
-            <span className="text-[10px] text-ink-faint uppercase">Again</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm font-bold text-yellow-500">{hards}</span>
-            <span className="text-[10px] text-ink-faint uppercase">Hard</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm font-bold text-green-500">{goods}</span>
-            <span className="text-[10px] text-ink-faint uppercase">Good</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm font-bold text-emerald-500">{easys}</span>
-            <span className="text-[10px] text-ink-faint uppercase">Easy</span>
-          </div>
+        <div className="mb-8 flex gap-6">
+          {(['again', 'hard', 'good', 'easy'] as const).map((r) => (
+            <div key={r} className="flex flex-col items-center gap-1">
+              <span className="font-mono text-lg font-semibold tabular-nums">{ratings.filter((x) => x === r).length}</span>
+              <span className="text-[11px] text-ink-faint">{RATING_LABELS[r]}</span>
+            </div>
+          ))}
         </div>
 
         <div className="flex gap-3">
@@ -117,7 +100,7 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
           </Button>
           <Button onClick={() => { setCurrent(0); setFlipped(false); setShowSummary(false); setRatings([]) }}>
             <RotateCcw className="h-4 w-4" />
-            Study Again
+            Study again
           </Button>
         </div>
       </div>
@@ -132,7 +115,7 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
         <p className="text-sm text-muted-foreground mb-6">Study some topics first to build your flashcard queue.</p>
         <Link href={`/${category}`}>
           <Button variant="secondary">
-            Browse {categoryNames[category] ?? category}
+            Browse {categoryShortTitles[category]}
           </Button>
         </Link>
       </div>
@@ -173,12 +156,7 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
             </div>
 
             <div className="flex items-center gap-3 mb-4 text-xs text-muted-foreground">
-              <span className={`capitalize ${
-                item.topic.difficulty === 'beginner' ? 'text-green-500' :
-                item.topic.difficulty === 'intermediate' ? 'text-yellow-500' : 'text-red-500'
-              }`}>
-                {item.topic.difficulty}
-              </span>
+              <span className="capitalize">{item.topic.difficulty}</span>
               <span>{item.topic.estimatedReadingTime} min read</span>
             </div>
 
@@ -197,17 +175,14 @@ export function CardDeck({ topics, category, onBack }: CardDeckProps) {
                   <button
                     key={ease}
                     onClick={(e) => { e.stopPropagation(); handleRate(ease) }}
-                    className={`rounded-lg py-2 text-xs font-medium transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.97] ${
-                      ease === 'again' ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' :
-                      ease === 'hard' ? 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20' :
-                      ease === 'good' ? 'bg-green-500/10 text-green-500 hover:bg-green-500/20' :
-                      'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                    className={`flex flex-col items-center rounded-lg border py-2 text-xs font-medium transition-colors active:scale-[0.97] ${
+                      ease === 'good'
+                        ? 'border-brand bg-brand text-brand-foreground hover:opacity-90'
+                        : 'border-border hover:border-border-strong hover:bg-secondary'
                     }`}
                   >
-                    {ease === 'again' ? `${i + 1} Again` :
-                     ease === 'hard' ? `${i + 1} Hard` :
-                     ease === 'good' ? `${i + 1} Good` :
-                     `${i + 1} Easy`}
+                    {RATING_LABELS[ease]}
+                    <span className={`font-mono text-[10.5px] font-normal ${ease === 'good' ? 'opacity-75' : 'text-ink-faint'}`}>{i + 1}</span>
                   </button>
                 ))}
               </div>

@@ -1,11 +1,6 @@
-import { getAllTopicFiles, readTopicMeta } from '@/lib/content/fs'
-import type { TopicMeta } from '@/lib/content/types'
-import { HomeClient } from './HomeClient'
+import { Library } from '@/components/library/Library'
+import { getLibrary } from '@/lib/content/library'
 
 export default function HomePage() {
-  const topics = getAllTopicFiles()
-    .map((f) => readTopicMeta<TopicMeta>(f.category, f.slug))
-    .filter((t): t is TopicMeta => t !== null)
-
-  return <HomeClient topics={topics} />
+  return <Library data={getLibrary()} category={null} />
 }

@@ -11,28 +11,20 @@ import {
   CommandItem,
 } from '@/components/ui/command'
 import type { TopicMeta } from '@/lib/content/types'
+import { categoryColor, categoryOrder, categoryShortTitles, isListedTopic } from '@/lib/content/sections'
+import { matchTopic } from '@/lib/content/matchTopic'
 import { assetPath } from '@/lib/utils'
-import { BookOpen, BookText, Code2, Cpu, Users } from 'lucide-react'
+import { onOpenSearch } from './openSearch'
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  'system-design': <BookOpen className="h-4 w-4" />,
-  dsa: <Code2 className="h-4 w-4" />,
-  'cs-fundamentals': <Cpu className="h-4 w-4" />,
-  behavioral: <Users className="h-4 w-4" />,
-  ddia: <BookText className="h-4 w-4" />,
-}
+type PaletteTopic = Pick<TopicMeta, 'slug' | 'title' | 'category' | 'tags'> & { estimatedReadingTime?: number }
 
-const categoryNames: Record<string, string> = {
-  'system-design': 'System Design',
-  dsa: 'DS&A',
-  'cs-fundamentals': 'CS Fundamentals',
-  behavioral: 'Behavioral',
-  ddia: 'DDIA',
-}
+// Items carry the slug as their (unique) value and [title, ...tags] as keywords.
+const paletteFilter = (value: string, search: string, keywords?: string[]) =>
+  matchTopic(keywords?.[0] ?? value, keywords?.slice(1) ?? [], search)
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
-  const [topics, setTopics] = useState<TopicMeta[]>([])
+  const [topics, setTopics] = useState<PaletteTopic[]>([])
   const router = useRouter()
 
   useEffect(() => {
@@ -43,43 +35,50 @@ export function CommandPalette() {
       }
     }
     document.addEventListener('keydown', down)
-    return () => document.removeEventListener('keydown', down)
+    const off = onOpenSearch(() => setOpen(true))
+    return () => {
+      document.removeEventListener('keydown', down)
+      off()
+    }
   }, [])
 
   useEffect(() => {
     fetch(assetPath('/search-index.json'))
       .then((r) => r.json())
       .then((data) => {
-        if (data?.documents) setTopics(data.documents as TopicMeta[])
+        // MiniSearch's serialised index keeps each document's stored fields here.
+        const stored = data?.storedFields ? (Object.values(data.storedFields) as PaletteTopic[]) : []
+        setTopics(stored.filter((t) => t.slug && isListedTopic(t.slug)))
       })
       .catch(() => setTopics([]))
   }, [])
 
-  const grouped = topics.reduce<Record<string, TopicMeta[]>>((acc, t) => {
-    if (!acc[t.category]) acc[t.category] = []
-    acc[t.category].push(t)
-    return acc
-  }, {})
+  const grouped = categoryOrder
+    .map((cat) => [cat, topics.filter((t) => t.category === cat)] as const)
+    .filter(([, list]) => list.length > 0)
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search 432 topics..." />
+    <CommandDialog open={open} onOpenChange={setOpen} filter={paletteFilter} title="Search topics" description="Search all topics by title or tag">
+      <CommandInput placeholder="Search all topics" />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        {Object.entries(grouped).map(([cat, catTopics]) => (
-          <CommandGroup key={cat} heading={categoryNames[cat] ?? cat}>
+        <CommandEmpty>No topics match.</CommandEmpty>
+        {grouped.map(([cat, catTopics]) => (
+          <CommandGroup key={cat} heading={categoryShortTitles[cat]}>
             {catTopics.map((topic) => (
               <CommandItem
                 key={topic.slug}
-                value={`${topic.title} ${topic.tags.join(' ')}`}
+                value={topic.slug}
+                keywords={[topic.title, ...(topic.tags ?? [])]}
                 onSelect={() => {
                   setOpen(false)
                   router.push(`/${topic.category}/${topic.slug}`)
                 }}
               >
-                <span className="text-muted-foreground shrink-0">{categoryIcons[topic.category] ?? null}</span>
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(topic.category) }} aria-hidden />
                 <span className="flex-1 truncate">{topic.title}</span>
-                <span className="text-xs text-ink-faint shrink-0">{topic.estimatedReadingTime}m</span>
+                {topic.estimatedReadingTime !== undefined && (
+                  <span className="shrink-0 font-mono text-xs text-ink-faint tabular-nums">{topic.estimatedReadingTime} min</span>
+                )}
               </CommandItem>
             ))}
           </CommandGroup>

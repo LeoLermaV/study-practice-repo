@@ -30,7 +30,7 @@ export class NeetcodeAdapter implements SourceAdapter {
     const filePath = path.join(cacheDir, this.name, '.problemSiteData.json')
     if (!fs.existsSync(filePath)) throw new Error('.problemSiteData.json not found')
 
-    const allData: any[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    const allData: NeetcodeProblem[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
     this._data = allData.filter((p) => p.neetcode150)
 
     console.log(`  NeetCode 150 problems: ${this._data.length}`)
@@ -42,6 +42,8 @@ export class NeetcodeAdapter implements SourceAdapter {
     }
 
     const topics: TopicMeta[] = []
+    // Map insertion order follows the upstream data, which lists groups in roadmap order.
+    const groupOrder = new Map([...groupMap.keys()].map((g, i) => [g, i]))
 
     for (const [groupName, problems] of groupMap) {
       const slug = groupName
@@ -68,8 +70,8 @@ export class NeetcodeAdapter implements SourceAdapter {
         sourceRepos: [this.name],
         neetcodeRoadmap: {
           group: groupName,
-          order: problems.findIndex((p) => p.blind75),
-          isBlind75: problems.some((p) => p.blind75),
+          order: groupOrder.get(groupName) ?? 0,
+          isBlind75: false,
         },
       })
     }
@@ -94,7 +96,7 @@ export class NeetcodeAdapter implements SourceAdapter {
           sourceRepos: [this.name],
           neetcodeRoadmap: {
             group: groupName,
-            order: 1,
+            order: groupOrder.get(groupName) ?? 0,
             isBlind75: true,
           },
         })
@@ -110,14 +112,16 @@ export class NeetcodeAdapter implements SourceAdapter {
     const topic = this._topics!.find((t) => t.slug === slug)
     if (!topic) return ''
 
+    const blindOnly = topic.neetcodeRoadmap?.isBlind75 === true
     const problems = this._data.filter((p) => {
       const pSlug = p.pattern.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-      return pSlug === slug || `${pSlug}-blind75` === slug
+      if (blindOnly) return `${pSlug}-blind75` === slug && p.blind75
+      return pSlug === slug
     })
 
     let md = `## ${topic.title}\n\n`
 
-    if (topic.neetcodeRoadmap?.isBlind75) {
+    if (blindOnly) {
       md += `### Blind 75 — Essential Problems\n\n`
     } else {
       md += `### NeetCode 150 — Complete List\n\n`

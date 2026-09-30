@@ -44,8 +44,8 @@ async function ingestAdapter(adapter: SourceAdapter) {
     const mdx = `---\n${JSON.stringify(topic, null, 2)}\n---\n\n${escaped}`
     fs.writeFileSync(path.join(categoryDir, `${topic.slug}.mdx`), mdx)
 
-    const meta = { ...topic }
-    delete (meta as any).sourceRepos
+    const meta: Partial<TopicMeta> = { ...topic }
+    delete meta.sourceRepos
     fs.writeFileSync(
       path.join(categoryDir, `${topic.slug}.json`),
       JSON.stringify(meta, null, 2)

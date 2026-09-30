@@ -2,7 +2,7 @@
 
 ## Project: faang-study
 
-A personal FAANG interview study app. Content-first, local-first, minimal AI.
+A personal FAANG interview study app. Content-first, local-first, minimal AI. Library-first UI in light and dark (amber accent, Helvetica) — see `DESIGN.md`.
 
 ### Quick start
 ```bash
@@ -14,7 +14,8 @@ npm run build     # Production build → out/
 ### Current state
 - **472 topics** across 5 categories: system-design (80), dsa (221), ddia (153), behavioral (11), cs-fundamentals (7)
 - **10 adapters** in `scripts/adapters/` ingest content from open-source repos + hardcoded content
-- **Pre-rendered static pages**, client-side search (MiniSearch), progress tracking (IndexedDB with optional GitHub Gist sync)
+- **Pre-rendered static pages**, client-side search (MiniSearch / cmdk palette), progress tracking (IndexedDB with optional GitHub Gist sync)
+- **Re-reading rotation**: "Mark as studied" schedules a topic; due topics show on `/review` and are rated Fuzzy / Mostly / Solid (SM-2)
 
 ### Key files
 | File | What it is |
@@ -23,8 +24,11 @@ npm run build     # Production build → out/
 | `HANDOVER.md` | Current state, gotchas, fresh-agent prompt |
 | `src/lib/content/types.ts` | All TypeScript types |
 | `scripts/adapters/base.ts` | `SourceAdapter` interface |
-| `src/components/layout/CategoryPage.tsx` | Sectioned category listing |
-| `src/components/topic/TopicPageContent.tsx` | Topic page + Quick Reference supplements |
+| `src/lib/content/sections.ts` | Section definitions + `groupTopics` / `orderedSlugs` (grouping and reading order) |
+| `src/lib/content/library.ts` | `getLibrary()`, `findTopic()`, `placeTopic()` (server-only) |
+| `src/components/library/Library.tsx` | Library screen used by `/` and every category route |
+| `src/components/progress/ReviewPanel.tsx` | Mark as studied / recall rating at the end of each topic |
+| `src/components/topic/TopicPageContent.tsx` | Topic page, breadcrumb, Quick Reference supplements, related topics, prev/next |
 | `src/lib/progress/sync.ts` | GitHub Gist push/pull + auto-sync |
 | `src/lib/progress/merge.ts` | CRDT-style entry merge for sync |
 | `src/components/layout/SyncProvider.tsx` | Auto-sync hook (pull on mount, flush on hide) |

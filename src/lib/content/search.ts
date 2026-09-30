@@ -7,7 +7,7 @@ export function createSearchIndex(topics: TopicMeta[]): MiniSearch<TopicMeta> {
   search = new MiniSearch<TopicMeta>({
     idField: 'slug',
     fields: ['title', 'tags'],
-    storeFields: ['slug', 'title', 'category', 'difficulty', 'tags'],
+    storeFields: ['slug', 'title', 'category', 'difficulty', 'tags', 'estimatedReadingTime'],
     searchOptions: {
       boost: { title: 2, tags: 1 },
       prefix: true,

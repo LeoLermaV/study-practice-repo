@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, type FC } from 'react'
-import { Play, Pause, SkipForward, RotateCcw, Settings } from 'lucide-react'
+import { Play, Pause, SkipForward, RotateCcw, Timer } from 'lucide-react'
+import { useHydrated } from '@/lib/useLocalStorage'
 
 const STORAGE_KEY = 'pomodoro-state'
 const CONFIG_KEY = 'pomodoro-config'
@@ -34,6 +35,14 @@ function loadConfig(): PomodoroConfig {
 
 function saveConfig(c: PomodoroConfig) {
   try { localStorage.setItem(CONFIG_KEY, JSON.stringify(c)) } catch {}
+}
+
+function loadState(cfg: PomodoroConfig): PomodoroState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw) as PomodoroState
+  } catch {}
+  return defaultState(cfg)
 }
 
 function defaultState(cfg: PomodoroConfig): PomodoroState {
@@ -81,19 +90,44 @@ function playBell() {
   } catch {}
 }
 
+/**
+ * Saved timer state lives in localStorage, which the server render cannot see.
+ * Until hydration a static pill holds the space; the live timer then starts
+ * from the saved state directly instead of correcting itself in an effect.
+ */
 export const PomodoroTimer: FC = () => {
-  const [cfg, setCfg] = useState<PomodoroConfig>(defaultConfig)
-  const [s, setS] = useState<PomodoroState>(() => defaultState(defaultConfig))
-  const [display, setDisplay] = useState(formatTime(defaultConfig.work * 60 * 1000))
-  const [showConfig, setShowConfig] = useState(false)
-  const configRef = useRef<HTMLDivElement>(null)
+  const hydrated = useHydrated()
+  if (!hydrated) {
+    return (
+      <span className="flex h-9 items-center gap-2 rounded-lg border border-border px-2.5 text-[13px] text-muted-foreground" aria-hidden>
+        <Timer className="size-3.5" />
+        <span className="font-mono tabular-nums">{formatTime(defaultConfig.work * 60 * 1000)}</span>
+      </span>
+    )
+  }
+  return <LiveTimer />
+}
+
+const LiveTimer: FC = () => {
+  const [cfg, setCfg] = useState<PomodoroConfig>(loadConfig)
+  const [s, setS] = useState<PomodoroState>(() => loadState(loadConfig()))
+  const [display, setDisplay] = useState(() => formatTime(remaining(loadState(loadConfig()))))
+  const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stateRef = useRef(s)
   const cfgRef = useRef(cfg)
 
-  stateRef.current = s
-  cfgRef.current = cfg
+  useEffect(() => {
+    stateRef.current = s
+    cfgRef.current = cfg
+  })
+
+  const apply = useCallback((next: PomodoroState) => {
+    setS(next)
+    setDisplay(formatTime(remaining(next)))
+  }, [])
 
   const ms = useCallback((phase: string) => {
     if (phase === 'longBreak') return cfg.longBreak * 60 * 1000
@@ -110,10 +144,10 @@ export const PomodoroTimer: FC = () => {
   }, [])
 
   const update = useCallback((next: PomodoroState) => {
-    setS(next)
+    apply(next)
     save(next)
     broadcast(next)
-  }, [save, broadcast])
+  }, [apply, save, broadcast])
 
   const start = useCallback(() => {
     const dur = ms(s.phase)
@@ -169,33 +203,18 @@ export const PomodoroTimer: FC = () => {
     // Reset timer with new duration
     const dur = next.work * 60 * 1000
     const resetState: PomodoroState = { phase: 'work', startTime: 0, elapsedBeforePause: 0, paused: true, cycle: 0, duration: dur }
-    setS(resetState)
+    apply(resetState)
     save(resetState)
     broadcast(resetState)
-  }, [cfg, save, broadcast])
-
-  // Restore state + config on mount
-  useEffect(() => {
-    const savedCfg = loadConfig()
-    if (savedCfg.work !== defaultConfig.work || savedCfg.shortBreak !== defaultConfig.shortBreak || savedCfg.longBreak !== defaultConfig.longBreak) {
-      setCfg(savedCfg)
-    }
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const restored = JSON.parse(raw) as PomodoroState
-        setS(restored)
-      }
-    } catch {}
-  }, [])
+  }, [cfg, apply, save, broadcast])
 
   // BroadcastChannel
   useEffect(() => {
     const ch = new BroadcastChannel(CHANNEL)
     channelRef.current = ch
-    ch.onmessage = (e: MessageEvent<PomodoroState>) => setS(e.data)
+    ch.onmessage = (e: MessageEvent<PomodoroState>) => apply(e.data)
     return () => ch.close()
-  }, [])
+  }, [apply])
 
   // Timer tick
   useEffect(() => {
@@ -235,100 +254,107 @@ export const PomodoroTimer: FC = () => {
     return () => clearInterval(iv)
   }, [save])
 
-  // Update display
-  useEffect(() => { setDisplay(formatTime(remaining(s))) }, [s])
-
-  // Dismiss config on click outside
+  // Dismiss the panel on outside click or Escape
   useEffect(() => {
-    if (!showConfig) return
-    const handler = (e: MouseEvent) => {
-      if (configRef.current && !configRef.current.contains(e.target as Node)) setShowConfig(false)
+    if (!open) return
+    const onPointer = (e: PointerEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showConfig])
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
 
   const isWork = s.phase === 'work'
+  const running = s.startTime > 0 && !s.paused
   const pct = s.duration > 0 ? (1 - remaining(s) / s.duration) : 0
+  const phaseLabel = s.phase === 'work' ? 'Focus' : s.phase === 'shortBreak' ? 'Short break' : 'Long break'
+  const phaseColor = isWork ? 'var(--brand)' : 'var(--success)'
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center gap-3 h-10 px-4 text-xs border-t border-sidebar-border bg-sidebar/90 backdrop-blur-md">
-      <div className="flex items-center gap-1.5 shrink-0">
-        <span className="inline-block w-2 h-2 rounded-full"
-          style={{ backgroundColor: isWork ? 'var(--brand)' : '#34d399' }}
-        />
-        <span className="text-muted-foreground font-medium">{isWork ? 'Work' : 'Break'}</span>
-      </div>
-
-      <div className="flex-1 h-1 rounded-full bg-secondary max-w-[200px] hidden md:block">
-        <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${Math.min(100, pct * 100)}%`, backgroundColor: isWork ? 'var(--brand)' : '#34d399' }}
-        />
-      </div>
-
-      <span className={`font-mono text-sm font-medium tabular-nums tracking-tight ${
-        s.paused && s.startTime > 0 ? 'text-ink-faint' : isWork ? 'text-foreground' : 'text-emerald-400'
-      }`}>
-        {display}
-      </span>
-
-      {s.startTime > 0 && (
-        <span className="text-ink-faint hidden sm:inline">Cycle {Math.min(s.cycle + 1, 4)}/4</span>
-      )}
-
-      <div className="flex items-center gap-0.5 ml-auto">
-        {s.startTime === 0 ? (
-          <button onClick={start} className="flex min-h-8 items-center gap-1 rounded-md px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
-            <Play className="h-3 w-3" /><span className="hidden sm:inline">Start</span>
-          </button>
-        ) : s.paused ? (
-          <button onClick={start} className="flex min-h-8 items-center gap-1 rounded-md px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
-            <Play className="h-3 w-3" /><span className="hidden sm:inline">Resume</span>
-          </button>
+    <div className="relative" ref={panelRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={`Focus timer, ${phaseLabel.toLowerCase()}, ${display} left`}
+        className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-[13px] transition-colors ${
+          running ? 'border-border-strong bg-card text-foreground' : 'border-border text-muted-foreground hover:border-border-strong hover:text-foreground'
+        }`}
+      >
+        {running ? (
+          <span className="size-2 rounded-full" style={{ backgroundColor: phaseColor }} aria-hidden />
         ) : (
-          <button onClick={pause} className="flex min-h-8 items-center gap-1 rounded-md px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]">
-            <Pause className="h-3 w-3" /><span className="hidden sm:inline">Pause</span>
-          </button>
+          <Timer className="size-3.5" aria-hidden />
         )}
+        <span className="font-mono tabular-nums">{display}</span>
+      </button>
 
-        <button onClick={skip} className="flex size-8 items-center justify-center rounded-md text-ink-faint hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Skip">
-          <SkipForward className="h-3 w-3" />
-        </button>
-        <button onClick={reset} className="flex size-8 items-center justify-center rounded-md text-ink-faint hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Reset">
-          <RotateCcw className="h-3 w-3" />
-        </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-50 w-64 rounded-xl border border-border bg-popover p-4 text-sm shadow-[0_12px_40px_rgba(0,0,0,0.18)] animate-scale-in">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
+              <span className="size-2 rounded-full" style={{ backgroundColor: phaseColor }} aria-hidden />
+              {phaseLabel}
+            </span>
+            <span className="text-ink-faint">Cycle {Math.min(s.cycle + 1, 4)} of 4</span>
+          </div>
 
-        <div className="relative" ref={configRef}>
-          <button onClick={() => setShowConfig(!showConfig)} className="flex size-8 items-center justify-center rounded-md text-ink-faint hover:text-foreground hover:bg-secondary transition-[color,background-color,transform] duration-200 active:scale-[0.97]" title="Settings">
-            <Settings className="h-3 w-3" />
-          </button>
+          <p className={`mt-3 font-mono text-[34px] font-medium leading-none tracking-tight tabular-nums ${
+            s.paused && s.startTime > 0 ? 'text-ink-faint' : 'text-foreground'
+          }`}>
+            {display}
+          </p>
 
-          {showConfig && (
-            <div className="absolute bottom-10 right-0 w-52 rounded-xl bg-popover border border-border p-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] animate-scale-in">
-              <p className="text-xs font-medium mb-3 text-muted-foreground">Timer Settings</p>
-              <div className="space-y-2">
-                {(['work', 'shortBreak', 'longBreak'] as const).map((key) => (
-                  <div key={key} className="flex items-center justify-between gap-2">
-                    <label className="text-xs text-muted-foreground capitalize">
-                      {key === 'shortBreak' ? 'Short Break' : key === 'longBreak' ? 'Long Break' : 'Work'}
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={120}
-                      value={cfg[key]}
-                      onChange={(e) => handleConfigChange(key, parseInt(e.target.value) || 1)}
-                      className="w-16 rounded-md bg-secondary border border-border px-2 py-1 text-xs text-foreground text-center tabular-nums outline-none focus:border-brand/60 focus:ring-2 focus:ring-ring"
-                    />
-                    <span className="text-[10px] text-ink-faint w-4">min</span>
-                  </div>
-                ))}
-              </div>
+          <div className="mt-3 h-1 rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full transition-[width] duration-300"
+              style={{ width: `${Math.min(100, pct * 100)}%`, backgroundColor: phaseColor }}
+            />
+          </div>
+
+          <div className="mt-4 flex items-center gap-1.5">
+            {running ? (
+              <button onClick={pause} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
+                <Pause className="size-3.5" />Pause
+              </button>
+            ) : (
+              <button onClick={start} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90">
+                <Play className="size-3.5" />{s.startTime > 0 ? 'Resume' : 'Start'}
+              </button>
+            )}
+            <button onClick={skip} title="Skip to next phase" aria-label="Skip to next phase" className="grid size-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+              <SkipForward className="size-3.5" />
+            </button>
+            <button onClick={reset} title="Reset timer" aria-label="Reset timer" className="grid size-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+              <RotateCcw className="size-3.5" />
+            </button>
+          </div>
+
+          <div className="mt-4 border-t border-border pt-3">
+            <p className="mb-2 text-xs text-muted-foreground">Durations (minutes)</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['work', 'shortBreak', 'longBreak'] as const).map((key) => (
+                <label key={key} className="flex flex-col gap-1 text-[11px] text-ink-faint">
+                  {key === 'shortBreak' ? 'Short break' : key === 'longBreak' ? 'Long break' : 'Focus'}
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={cfg[key]}
+                    onChange={(e) => handleConfigChange(key, parseInt(e.target.value) || 1)}
+                    className="h-8 w-full rounded-md border border-border bg-secondary px-2 text-center text-xs text-foreground tabular-nums outline-none focus:border-brand/60 focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+              ))}
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
