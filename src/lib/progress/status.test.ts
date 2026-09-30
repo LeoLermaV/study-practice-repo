@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { ProgressEntry } from '../content/types'
-import { topicStatus, isDue, dueEntries, upcomingEntries, reviewLabel, lateLabel } from './status'
+import { topicStatus, isDue, dueEntries, upcomingEntries, reviewLabel, lateLabel, todaysQueue } from './status'
 import { RECALL_OPTIONS, previewIntervals, formatInterval, formatDueIn } from './recall'
 
 const NOW = new Date(2026, 8, 30, 12, 0, 0).getTime()
@@ -112,5 +112,35 @@ describe('recall', () => {
     expect(formatInterval(95)).toBe('3 months')
     expect(formatDueIn(NOW + DAY, NOW)).toBe('tomorrow')
     expect(formatDueIn(NOW + 6 * DAY, NOW)).toBe('in 6 days')
+  })
+})
+
+describe('todaysQueue', () => {
+  const due = (slug: string, daysLate: number) => entry(slug, { studiedAt: 1, nextReviewDue: NOW - daysLate * DAY })
+  const progress = [due('a', 5), due('b', 4), due('c', 3), due('d', 2), due('e', 1)]
+
+  it('shows everything due without a limit', () => {
+    expect(todaysQueue(progress, NOW, null)).toEqual({ entries: progress, waiting: 0, ratedToday: 0 })
+  })
+
+  it('caps the list at the limit, most overdue first', () => {
+    const q = todaysQueue(progress, NOW, 2)
+    expect(q.entries.map((e) => e.slug)).toEqual(['a', 'b'])
+    expect(q.waiting).toBe(3)
+  })
+
+  it('counts ratings given today against the limit', () => {
+    const rated = entry('done', { studiedAt: 1, practicedAt: NOW - 60_000, nextReviewDue: NOW + 6 * DAY })
+    const q = todaysQueue([...progress, rated], NOW, 2)
+    expect(q.ratedToday).toBe(1)
+    expect(q.entries.map((e) => e.slug)).toEqual(['a'])
+    expect(q.waiting).toBe(4)
+  })
+
+  it('shows nothing once the allowance is used, and ignores ratings from other days', () => {
+    const today = [1, 2].map((i) => entry(`t${i}`, { studiedAt: 1, practicedAt: NOW - i * 60_000, nextReviewDue: NOW + DAY }))
+    const yesterday = entry('y', { studiedAt: 1, practicedAt: NOW - DAY, nextReviewDue: NOW + DAY })
+    const q = todaysQueue([...progress, ...today, yesterday], NOW, 2)
+    expect(q).toMatchObject({ entries: [], waiting: 5, ratedToday: 2 })
   })
 })

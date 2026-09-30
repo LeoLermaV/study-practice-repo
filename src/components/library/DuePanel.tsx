@@ -7,7 +7,8 @@ import { categoryColor } from '@/lib/content/sections'
 import { getStudyStats } from '@/lib/progress/db'
 import { isInRotation } from '@/lib/progress/queue'
 import { formatDueIn } from '@/lib/progress/recall'
-import { dueEntries, lateLabel, reviewLabel, upcomingEntries } from '@/lib/progress/status'
+import { lateLabel, reviewLabel, todaysQueue, upcomingEntries } from '@/lib/progress/status'
+import { useDailyLimit } from '@/lib/progress/dailyLimit'
 import type { IndexedTopic, ProgressState } from '@/lib/progress/useProgress'
 import { StatusLegend } from './StatusIcon'
 import { topicHref } from './utils'
@@ -17,15 +18,22 @@ export interface DueItem {
   topic: IndexedTopic
 }
 
-/** Due topics that still exist in the content, most overdue first. */
-export function dueItems(progress: ProgressState, index: Map<string, IndexedTopic>): DueItem[] {
-  if (!progress.loaded) return []
-  const out: DueItem[] = []
-  for (const entry of dueEntries(progress.entries, progress.now)) {
-    const topic = index.get(entry.slug)
-    if (topic) out.push({ entry, topic })
-  }
-  return out
+export interface DueList {
+  items: DueItem[]
+  /** Due but held back by the daily limit. */
+  waiting: number
+}
+
+/**
+ * Today's due topics that still exist in the content, most overdue first,
+ * capped by the daily limit. Unknown slugs are dropped before the cap so they
+ * cannot use up the allowance.
+ */
+export function dueItems(progress: ProgressState, index: Map<string, IndexedTopic>, limit: number | null): DueList {
+  if (!progress.loaded) return { items: [], waiting: 0 }
+  const known = progress.entries.filter((e) => index.has(e.slug))
+  const { entries, waiting } = todaysQueue(known, progress.now, limit)
+  return { items: entries.map((entry) => ({ entry, topic: index.get(entry.slug)! })), waiting }
 }
 
 /** "2nd review" when due today, otherwise how late it is. */
@@ -36,7 +44,8 @@ export function dueMeta(entry: ProgressEntry, now: number): string {
 
 /** Compact due summary for screens without the side panel. */
 export function DueBanner({ progress, index }: { progress: ProgressState; index: Map<string, IndexedTopic> }) {
-  const due = dueItems(progress, index)
+  const [limit] = useDailyLimit()
+  const due = dueItems(progress, index, limit).items
   if (due.length === 0) return null
   const names = due.slice(0, 2).map((d) => d.topic.title).join(', ')
   const more = due.length - 2
@@ -61,7 +70,8 @@ export function DueBanner({ progress, index }: { progress: ProgressState; index:
 }
 
 export function DuePanel({ progress, index }: { progress: ProgressState; index: Map<string, IndexedTopic> }) {
-  const due = dueItems(progress, index)
+  const [limit] = useDailyLimit()
+  const { items: due, waiting } = dueItems(progress, index, limit)
   const [streak, setStreak] = useState<number | null>(null)
 
   useEffect(() => {
@@ -88,7 +98,9 @@ export function DuePanel({ progress, index }: { progress: ProgressState; index: 
             </div>
           ) : due.length === 0 ? (
             <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-              {next ? (
+              {waiting > 0 ? (
+                <>Done for today. {waiting} more {waiting === 1 ? 'is' : 'are'} due and will come up over the next days.</>
+              ) : next ? (
                 <>Nothing due. Next up is <span className="text-foreground">{index.get(next.slug)?.title}</span>, {formatDueIn(next.nextReviewDue, progress.now)}.</>
               ) : (
                 'Nothing due. Mark a topic as studied and it comes back here when it is time to re-read it.'
@@ -110,9 +122,10 @@ export function DuePanel({ progress, index }: { progress: ProgressState; index: 
                   </li>
                 ))}
               </ul>
-              {due.length > 5 && (
+              {(due.length > 5 || waiting > 0) && (
                 <Link href="/review" className="mt-1 block text-[12.5px] text-muted-foreground hover:text-foreground">
-                  View all {due.length}
+                  {due.length > 5 ? `View all ${due.length}` : 'Open review'}
+                  {waiting > 0 && ` · ${waiting} more waiting`}
                 </Link>
               )}
               <Link

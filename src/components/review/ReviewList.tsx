@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import type { LibraryData } from '@/lib/content/library'
@@ -8,6 +9,7 @@ import { isInRotation } from '@/lib/progress/queue'
 import { formatDueIn } from '@/lib/progress/recall'
 import { upcomingEntries } from '@/lib/progress/status'
 import { useProgress, useTopicIndex } from '@/lib/progress/useProgress'
+import { useDailyLimit } from '@/lib/progress/dailyLimit'
 import { dueItems, dueMeta } from '@/components/library/DuePanel'
 import { topicHref } from '@/components/library/utils'
 
@@ -27,6 +29,8 @@ function dayLabel(dueAt: number, now: number): string {
 export function ReviewList({ data }: { data: LibraryData }) {
   const progress = useProgress()
   const index = useTopicIndex(data)
+  const [limit] = useDailyLimit()
+  const [showAll, setShowAll] = useState(false)
 
   if (!progress.loaded) {
     return (
@@ -36,7 +40,9 @@ export function ReviewList({ data }: { data: LibraryData }) {
     )
   }
 
-  const due = dueItems(progress, index)
+  const limited = dueItems(progress, index, limit)
+  const due = showAll ? dueItems(progress, index, null).items : limited.items
+  const waiting = showAll ? 0 : limited.waiting
   const minutes = due.reduce((sum, d) => sum + d.topic.minutes, 0)
   const inReview = progress.entries.filter((e) => isInRotation(e)).length
 
@@ -86,12 +92,17 @@ export function ReviewList({ data }: { data: LibraryData }) {
             <span className="truncate">Start with {due[0].topic.title}</span>
             <ArrowRight className="size-4 shrink-0" />
           </Link>
+          {waiting > 0 && <WaitingNote waiting={waiting} limit={limit} onShowAll={() => setShowAll(true)} />}
         </>
       ) : (
         <>
-          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]">Nothing to re-read today</h1>
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]">
+            {waiting > 0 ? 'Done for today' : 'Nothing to re-read today'}
+          </h1>
           <p className="mt-2 max-w-[56ch] text-[14px] leading-relaxed text-muted-foreground">
-            {inReview === 0
+            {waiting > 0
+              ? `You have reached your daily limit of ${limit}.`
+              : inReview === 0
               ? 'When you finish a topic, press "Mark as studied" at the end of its page. It comes back here when it is time for a quick re-read.'
               : `${inReview} ${inReview === 1 ? 'topic is' : 'topics are'} in your re-reading schedule. They appear here on the day they are due.`}
           </p>
@@ -99,6 +110,7 @@ export function ReviewList({ data }: { data: LibraryData }) {
             Browse the library
             <ArrowRight className="size-4" />
           </Link>
+          {waiting > 0 && <WaitingNote waiting={waiting} limit={limit} onShowAll={() => setShowAll(true)} />}
         </>
       )}
 
@@ -134,5 +146,17 @@ export function ReviewList({ data }: { data: LibraryData }) {
         </p>
       )}
     </div>
+  )
+}
+
+function WaitingNote({ waiting, limit, onShowAll }: { waiting: number; limit: number | null; onShowAll: () => void }) {
+  return (
+    <p className="mt-4 text-[13px] text-muted-foreground">
+      {waiting} more {waiting === 1 ? 'topic is' : 'topics are'} due, held back by your daily limit of {limit}. The most overdue come
+      first each day.{' '}
+      <button type="button" onClick={onShowAll} className="font-medium text-brand hover:underline">
+        Show {waiting === 1 ? 'it' : 'them'} now
+      </button>
+    </p>
   )
 }

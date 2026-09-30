@@ -7,6 +7,7 @@ import { Download, Upload, Trash2, Eye, EyeOff } from 'lucide-react'
 import { getToken, setToken, clearToken, getSyncStatus, pushProgress, pullProgress, importProgress, exportProgress, isAutoSync, setAutoSync } from '@/lib/progress/sync'
 import { BackupError, backupFileName, parseBackup } from '@/lib/progress/backup'
 import { useHydrated } from '@/lib/useLocalStorage'
+import { DAILY_LIMIT_OPTIONS, useDailyLimit } from '@/lib/progress/dailyLimit'
 import { cn } from '@/lib/utils'
 
 const THEMES = [
@@ -23,6 +24,7 @@ export default function SettingsPage() {
       <h1 className="mb-6 text-[26px] font-semibold tracking-[-0.02em] md:text-[28px]">Settings</h1>
       <div className="space-y-5">
         <Appearance />
+        <ReviewSettings />
         {hydrated ? <SyncSettings /> : <div className="h-72 animate-pulse rounded-xl bg-secondary" />}
         <BackupSettings />
         <DataSettings />
@@ -72,6 +74,40 @@ function Appearance() {
         ))}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">System follows your device&apos;s light or dark setting.</p>
+    </Panel>
+  )
+}
+
+function ReviewSettings() {
+  const [limit, setLimit] = useDailyLimit()
+  const hydrated = useHydrated()
+  return (
+    <Panel title="Review">
+      <p className="mb-2 text-sm font-medium">Daily re-reading limit</p>
+      <div role="radiogroup" aria-label="Daily re-reading limit" className="inline-flex gap-0.5 rounded-lg border border-border bg-background p-[3px]">
+        {DAILY_LIMIT_OPTIONS.map((option) => {
+          const checked = hydrated && limit === option
+          return (
+            <button
+              key={String(option)}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              onClick={() => setLimit(option)}
+              className={cn(
+                'h-8 rounded-md px-3.5 text-[13px] transition-colors',
+                checked ? 'bg-secondary font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {option === null ? 'No limit' : `${option} a day`}
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Caps how many topics Review asks for each day, so a missed week does not arrive all at once. Topics over the limit stay due
+        and the most overdue come first. Saved on this device only.
+      </p>
     </Panel>
   )
 }

@@ -61,3 +61,32 @@ export function lateLabel(dueAt: number, now: number): string {
   if (days === 1) return '1 day late'
   return `${days} days late`
 }
+
+function sameLocalDay(a: number, b: number): boolean {
+  const x = new Date(a)
+  const y = new Date(b)
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
+}
+
+export interface TodayQueue {
+  /** Due topics to re-read today, most overdue first. */
+  entries: ProgressEntry[]
+  /** Due topics held back by the daily limit; they surface on later days. */
+  waiting: number
+  /** Recall ratings already given today (they count against the limit). */
+  ratedToday: number
+}
+
+/**
+ * Today's re-reading list. With a daily limit, ratings given today use up the
+ * allowance, so finishing five of five leaves nothing rather than the next
+ * five. Anything held back stays due and, being most overdue, leads tomorrow.
+ */
+export function todaysQueue(progress: ProgressEntry[], now: number, limit: number | null): TodayQueue {
+  const due = dueEntries(progress, now)
+  const ratedToday = progress.filter((e) => e.practicedAt !== null && sameLocalDay(e.practicedAt, now)).length
+  if (limit === null) return { entries: due, waiting: 0, ratedToday }
+  const allowance = Math.max(0, limit - ratedToday)
+  const entries = due.slice(0, allowance)
+  return { entries, waiting: due.length - entries.length, ratedToday }
+}

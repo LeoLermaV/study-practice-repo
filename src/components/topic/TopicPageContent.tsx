@@ -9,7 +9,9 @@ import { findTopic, placeTopic, type TopicRef } from '@/lib/content/library'
 import { categoryColor, categoryShortTitles } from '@/lib/content/sections'
 import type { TopicMeta, Category } from '@/lib/content/types'
 import { AIPracticeButton } from '@/components/topic/AIPracticeButton'
-import { ReviewPanel, ReviewStatus } from '@/components/progress/ReviewPanel'
+import { OutlineDisclosure, OutlineRail } from '@/components/topic/Outline'
+import { remarkOutline, type OutlineItem } from '@/lib/content/outline'
+import { DueNotes, ReviewPanel, ReviewStatus } from '@/components/progress/ReviewPanel'
 
 const supplementMap: Record<string, string[]> = {
   'load-balancing': ['donnemartin-load-balancer'],
@@ -65,6 +67,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
 
   body = body.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 
+  const { content, outline } = await compileTopic(slug, body)
   const placement = placeTopic(category, slug)
   const prerequisites = resolve(meta.prerequisites, slug)
   const related = resolve(meta.relatedTopics, slug).filter((r) => !prerequisites.some((p) => p.slug === r.slug))
@@ -72,7 +75,8 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
   const supplements = meta.prerequisites[0]?.startsWith('donnemartin-') ? [] : resolve(supplementMap[slug] ?? [], slug)
 
   return (
-    <article className="mx-auto max-w-[680px] animate-fade-in">
+    <article className="relative mx-auto max-w-[680px] animate-fade-in">
+      <OutlineRail items={outline} />
       <nav aria-label="Breadcrumb" className="mb-5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-muted-foreground">
         <Link href="/" className="hover:text-foreground">Library</Link>
         <span aria-hidden className="text-ink-faint">/</span>
@@ -115,11 +119,12 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
             ))}
           </p>
         )}
+        <DueNotes slug={slug} />
       </header>
 
-      <div className="topic-content max-w-none">
-        <MDXBody slug={slug} source={body} />
-      </div>
+      <OutlineDisclosure items={outline} />
+
+      <div className="topic-content max-w-none">{content}</div>
 
       {supplements.length > 0 && (
         <aside className="mt-10 rounded-xl border border-border p-4">
@@ -185,17 +190,18 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
   )
 }
 
-const mdxCache = new Map<string, React.ReactNode>()
+const compiled = new Map<string, { content: React.ReactNode; outline: OutlineItem[] }>()
 
-async function MDXBody({ slug, source }: { slug: string; source: string }) {
-  const cached = mdxCache.get(slug)
-  if (cached !== undefined) return <>{cached}</>
+async function compileTopic(slug: string, source: string): Promise<{ content: React.ReactNode; outline: OutlineItem[] }> {
+  const cached = compiled.get(slug)
+  if (cached) return cached
 
+  const outline: OutlineItem[] = []
   const { content } = await compileMDX({
     source,
     options: {
       parseFrontmatter: false,
-      mdxOptions: { remarkPlugins: [remarkGfm], format: 'md' },
+      mdxOptions: { remarkPlugins: [remarkGfm, remarkOutline(outline)], format: 'md' },
     },
     components: {
       a: (props: React.ComponentProps<'a'>) => {
@@ -207,6 +213,7 @@ async function MDXBody({ slug, source }: { slug: string; source: string }) {
       },
     },
   })
-  mdxCache.set(slug, content)
-  return <>{content}</>
+  const result = { content, outline }
+  compiled.set(slug, result)
+  return result
 }

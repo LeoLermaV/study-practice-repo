@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Plus, X } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowRight, Check, Plus, X } from 'lucide-react'
 import type { ProgressEntry } from '@/lib/content/types'
-import { addPracticeNote, getProgress, markStudied, rateReview, removeFromRotation, removePracticeNote } from '@/lib/progress/db'
+import { addPracticeNote, getAllProgress, getProgress, markStudied, rateReview, removeFromRotation, removePracticeNote } from '@/lib/progress/db'
+import { loadTopicLookup, lookupHref, type LookupTopic } from '@/lib/content/topicLookup'
+import { useDailyLimit } from '@/lib/progress/dailyLimit'
 import { onProgressChanged } from '@/lib/progress/events'
 import { isInRotation } from '@/lib/progress/queue'
 import { RECALL_OPTIONS, formatDueIn, formatInterval, previewIntervals, type RecallRating } from '@/lib/progress/recall'
-import { isDue } from '@/lib/progress/status'
+import { isDue, todaysQueue } from '@/lib/progress/status'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -52,6 +55,35 @@ export function ReviewStatus({ slug }: { slug: string }) {
   )
 }
 
+/** Notes written on earlier re-reads, shown above the article when the topic is due. */
+export function DueNotes({ slug }: { slug: string }) {
+  const [{ loaded, entry, now }] = useTopicProgress(slug)
+  if (!loaded || !entry || !isDue(entry, now) || entry.practiceNotes.length === 0) return null
+  return (
+    <aside className="mt-4 rounded-r-lg border-l-2 border-brand bg-brand/5 px-3.5 py-2.5">
+      <p className="text-xs font-medium text-brand">Your notes from last time</p>
+      <ul className="mt-1 space-y-1">
+        {entry.practiceNotes.map((note) => (
+          <li key={note.timestamp} className="whitespace-pre-wrap text-[13.5px] text-foreground">{note.text}</li>
+        ))}
+      </ul>
+    </aside>
+  )
+}
+
+interface NextUp {
+  next: LookupTopic | null
+  remaining: number
+}
+
+/** The next topic to re-read today after `slug` was just rated, honouring the daily limit. */
+async function findNextDue(limit: number | null): Promise<NextUp> {
+  const [progress, lookup] = await Promise.all([getAllProgress(), loadTopicLookup()])
+  const known = progress.filter((e) => lookup.has(e.slug))
+  const { entries } = todaysQueue(known, Date.now(), limit)
+  return { next: entries.length ? lookup.get(entries[0].slug) ?? null : null, remaining: entries.length }
+}
+
 /**
  * End-of-article action. New topic: mark as studied. Due topic: rate recall,
  * which reschedules it. In rotation but not due: show when it returns.
@@ -63,6 +95,8 @@ export function ReviewPanel({ slug, title }: { slug: string; title: string }) {
   const [busy, setBusy] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteText, setNoteText] = useState('')
+  const [nextUp, setNextUp] = useState<NextUp | null>(null)
+  const [limit] = useDailyLimit()
 
   if (!loaded) return <div className="h-[132px] animate-pulse rounded-xl bg-secondary" />
 
@@ -78,8 +112,14 @@ export function ReviewPanel({ slug, title }: { slug: string; title: string }) {
     }
   }
 
-  const rate = (rating: RecallRating) =>
-    run(() => rateReview(slug, rating), (e) => `Saved. ${title} comes back ${formatDueIn(e.nextReviewDue, Date.now())}.`)
+  const rate = async (rating: RecallRating) => {
+    await run(() => rateReview(slug, rating), (e) => `Saved. ${title} comes back ${formatDueIn(e.nextReviewDue, Date.now())}.`)
+    try {
+      setNextUp(await findNextDue(limit))
+    } catch {
+      setNextUp(null) // lookup unavailable (offline without a cached index): just skip the hint
+    }
+  }
 
   const saveNote = async () => {
     const text = noteText.trim()
@@ -130,8 +170,27 @@ export function ReviewPanel({ slug, title }: { slug: string; title: string }) {
           <p className="mt-1 text-[13.5px] text-muted-foreground">
             {confirmation ?? `Next re-read ${formatDueIn(entry!.nextReviewDue, now)}.`}
           </p>
+          {nextUp && (
+            nextUp.next ? (
+              <Link
+                href={lookupHref(nextUp.next)}
+                className="mt-4 flex h-11 items-center justify-between gap-3 rounded-lg bg-brand px-4 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
+              >
+                <span className="truncate">Next: {nextUp.next.title}</span>
+                <span className="flex shrink-0 items-center gap-2 text-xs font-normal opacity-85">
+                  {nextUp.remaining} left today
+                  <ArrowRight className="size-4" />
+                </span>
+              </Link>
+            ) : (
+              <p className="mt-3 text-[13.5px] font-medium text-foreground">
+                That was the last one for today.{' '}
+                <Link href="/" className="font-normal text-brand hover:underline">Back to the library</Link>
+              </p>
+            )
+          )}
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[13px]">
-            <button type="button" onClick={() => { setConfirmation(null); setRateEarly(true) }} className="font-medium text-brand hover:underline">
+            <button type="button" onClick={() => { setConfirmation(null); setNextUp(null); setRateEarly(true) }} className="font-medium text-brand hover:underline">
               Re-read early? Rate it now
             </button>
             <button

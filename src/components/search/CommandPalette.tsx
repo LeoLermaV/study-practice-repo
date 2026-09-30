@@ -13,7 +13,7 @@ import {
 import type { TopicMeta } from '@/lib/content/types'
 import { categoryColor, categoryOrder, categoryShortTitles, isListedTopic } from '@/lib/content/sections'
 import { matchTopic } from '@/lib/content/matchTopic'
-import { assetPath } from '@/lib/utils'
+import { loadTopicLookup } from '@/lib/content/topicLookup'
 import { onOpenSearch } from './openSearch'
 
 type PaletteTopic = Pick<TopicMeta, 'slug' | 'title' | 'category' | 'tags'> & { estimatedReadingTime?: number }
@@ -43,13 +43,8 @@ export function CommandPalette() {
   }, [])
 
   useEffect(() => {
-    fetch(assetPath('/search-index.json'))
-      .then((r) => r.json())
-      .then((data) => {
-        // MiniSearch's serialised index keeps each document's stored fields here.
-        const stored = data?.storedFields ? (Object.values(data.storedFields) as PaletteTopic[]) : []
-        setTopics(stored.filter((t) => t.slug && isListedTopic(t.slug)))
-      })
+    loadTopicLookup()
+      .then((lookup) => setTopics([...lookup.values()].filter((t) => isListedTopic(t.slug))))
       .catch(() => setTopics([]))
   }, [])
 

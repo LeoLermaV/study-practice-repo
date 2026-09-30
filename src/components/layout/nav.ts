@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { categoryOrder } from '@/lib/content/sections'
-import { getDueTopics } from '@/lib/progress/db'
+import { loadTopicLookup } from '@/lib/content/topicLookup'
+import { getAllProgress } from '@/lib/progress/db'
+import { useDailyLimit } from '@/lib/progress/dailyLimit'
 import { onProgressChanged } from '@/lib/progress/events'
+import { todaysQueue } from '@/lib/progress/status'
 
 export type NavKey = 'library' | 'review' | 'flashcards' | 'progress' | 'settings'
 
@@ -30,22 +33,30 @@ export function useActiveNav(): NavKey | null {
   return activeNav(usePathname())
 }
 
-/** Number of topics due for re-reading; refreshes on navigation and progress changes. */
+/**
+ * Topics left to re-read today, matching the Review page: known topics only,
+ * capped by the daily limit. Refreshes on navigation and progress changes.
+ */
 export function useDueCount(): number {
   const pathname = usePathname()
+  const [limit] = useDailyLimit()
   const [count, setCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    const refresh = () => {
-      getDueTopics()
-        .then((due) => { if (!cancelled) setCount(due.length) })
-        .catch(() => { if (!cancelled) setCount(0) })
+    const refresh = async () => {
+      try {
+        const [progress, lookup] = await Promise.all([getAllProgress(), loadTopicLookup().catch(() => null)])
+        const known = lookup ? progress.filter((e) => lookup.has(e.slug)) : progress
+        if (!cancelled) setCount(todaysQueue(known, Date.now(), limit).entries.length)
+      } catch {
+        if (!cancelled) setCount(0)
+      }
     }
     refresh()
     const off = onProgressChanged(refresh)
     return () => { cancelled = true; off() }
-  }, [pathname])
+  }, [pathname, limit])
 
   return count
 }
