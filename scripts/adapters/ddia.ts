@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { execSync } from 'child_process'
+import { syncSource } from '../git-source'
 import type { TopicMeta, Difficulty } from '../../src/lib/content/types'
 import type { SourceAdapter } from './base'
 
@@ -280,15 +280,8 @@ export class DDIAAdapter implements SourceAdapter {
   private refsDir = path.join(process.cwd(), '.cache', 'repos', 'ept-ddia-references')
   private referencesUrl = 'https://github.com/ept/ddia-references'
 
-  private ensureDir(dir: string) {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  }
-
   private async ensureReferences() {
-    if (!fs.existsSync(this.refsDir)) {
-      this.ensureDir(path.dirname(this.refsDir))
-      execSync(`git clone --depth 1 "${this.referencesUrl}" "${this.refsDir}"`, { stdio: 'pipe' })
-    }
+    syncSource('ept-ddia-references', this.referencesUrl, this.refsDir)
     this.parseReferences()
   }
 

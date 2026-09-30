@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "pins:update": "tsx scripts/update-pins.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

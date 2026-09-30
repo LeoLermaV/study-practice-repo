@@ -85,6 +85,16 @@ export default function ProgressPage() {
     return rows.sort((a, b) => b.lastTouched - a.lastTouched)
   }, [allProgress, topicIndex])
 
+  // Progress under slugs the content no longer has (an upstream rename). An empty
+  // index means the topic list failed to load, not that everything vanished.
+  const missing = useMemo(() => {
+    if (!topicIndex || topicIndex.size === 0) return []
+    return allProgress
+      .filter((e) => (e.readAt || e.studiedAt) && !topicIndex.has(e.slug))
+      .map((e) => e.slug)
+      .sort()
+  }, [allProgress, topicIndex])
+
   const filtered = useMemo(
     () => (filter === 'all' ? activity : activity.filter((r) => r.stage === filter)),
     [activity, filter]
@@ -146,6 +156,23 @@ export default function ProgressPage() {
         <StatCard label="in review" value={stats.totalStudied} />
         <StatCard label="due today" value={stats.topicsDueForReview} />
       </div>
+
+      {missing.length > 0 && (
+        <div role="status" className="mb-8 rounded-xl border border-border bg-card p-4 text-sm">
+          <p className="font-medium">
+            {missing.length} {missing.length === 1 ? 'topic' : 'topics'} in your progress no longer {missing.length === 1 ? 'exists' : 'exist'}
+          </p>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Usually the source renamed a page, which changes its address. The history is kept, but these can&apos;t be opened
+            or reviewed until the content has them again.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {missing.map((slug) => (
+              <li key={slug} className="rounded-md bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground">{slug}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
