@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import type { TopicMeta, Difficulty } from '../../src/lib/content/types'
 import type { SourceAdapter } from './base'
+import { convertMkDocsAdmonitions } from '../../src/lib/content/markdown'
 
 const cacheDir = path.join(process.cwd(), '.cache', 'repos')
 const repoName = 'krahets-hello-algo'
@@ -173,10 +174,7 @@ function processContent(raw: string, chapterDir: string): string {
 
   result = result.replace(/^\?{3,}\s+\S+.*\n/gm, '')
 
-  result = result.replace(
-    /^!!!\s*(\w+)\s+"?(.+?)"?$/gm,
-    (_match, _type: string, title: string) => `> **${title}**`
-  )
+  result = convertMkDocsAdmonitions(result)
 
   result = result.replace(
     /"?\?{3,}\s+\S+\s+"?(.+?)"?$/gm,
@@ -256,6 +254,8 @@ function processContent(raw: string, chapterDir: string): string {
   }
 
   result = result.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Blockquote markers at line start are markdown, not text.
+  result = result.replace(/^(?:&gt; ?)+/gm, (markers) => markers.replace(/&gt;/g, '>'))
 
   const restoreHtml: [string, string][] = [
     ['\x00PU_U\x00', '<u>'],

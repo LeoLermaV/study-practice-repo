@@ -5,6 +5,7 @@ import type { TopicMeta } from '../src/lib/content/types'
 import type { SourceAdapter } from './adapters/base'
 import { createSearchIndex } from '../src/lib/content/search'
 import { extractHeadings } from '../src/lib/content/headings'
+import { prepareMarkdown, usesInlineDollarMath } from '../src/lib/content/markdown'
 import { buildTopicGraph } from '../src/lib/content/topics'
 
 const cacheDir = path.join(process.cwd(), '.cache', 'repos')
@@ -41,7 +42,7 @@ async function ingestAdapter(adapter: SourceAdapter) {
 
     const body = await adapter.content(topic.slug)
     const bodyWithCode = convertIndentedCodeBlocks(body)
-    const escaped = escapeBraces(bodyWithCode)
+    const escaped = prepareMarkdown(bodyWithCode, usesInlineDollarMath(topic.slug))
     const mdx = `---\n${JSON.stringify(topic, null, 2)}\n---\n\n${escaped}`
     fs.writeFileSync(path.join(categoryDir, `${topic.slug}.mdx`), mdx)
 
@@ -130,16 +131,6 @@ function convertIndentedCodeBlocks(body: string): string {
   flushCode()
 
   return result.join('\n')
-}
-
-function escapeBraces(body: string): string {
-  const parts = body.split(/(```[\s\S]*?```)/)
-  return parts
-    .map((part, i) => {
-      if (i % 2 === 1) return part
-      return part.replace(/(?<!\\){/g, '\\{').replace(/(?<!\\)}/g, '\\}')
-    })
-    .join('')
 }
 
 async function main() {

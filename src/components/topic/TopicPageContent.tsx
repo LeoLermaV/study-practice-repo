@@ -4,6 +4,9 @@ import { compileMDX } from 'next-mdx-remote/rsc'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { readTopicMeta } from '@/lib/content/fs'
 import { findTopic, placeTopic, type TopicRef } from '@/lib/content/library'
 import { categoryColor, categoryShortTitles } from '@/lib/content/sections'
@@ -11,6 +14,7 @@ import type { TopicMeta, Category } from '@/lib/content/types'
 import { AIPracticeButton } from '@/components/topic/AIPracticeButton'
 import { OutlineDisclosure, OutlineRail } from '@/components/topic/Outline'
 import { remarkOutline, type OutlineItem } from '@/lib/content/outline'
+import { usesInlineDollarMath } from '@/lib/content/markdown'
 import { RecordVisit } from '@/lib/recent'
 import { DueNotes, ReviewPanel, ReviewStatus } from '@/components/progress/ReviewPanel'
 
@@ -203,7 +207,12 @@ async function compileTopic(slug: string, source: string): Promise<{ content: Re
     source,
     options: {
       parseFrontmatter: false,
-      mdxOptions: { remarkPlugins: [remarkGfm, remarkOutline(outline)], format: 'md' },
+      mdxOptions: {
+        remarkPlugins: [remarkGfm, [remarkMath, { singleDollarTextMath: usesInlineDollarMath(slug) }], remarkOutline(outline)],
+        // Bad LaTeX renders as a red error in place instead of failing the build.
+        rehypePlugins: [[rehypeKatex, { throwOnError: false, strict: false }]],
+        format: 'md',
+      },
     },
     components: {
       a: (props: React.ComponentProps<'a'>) => {

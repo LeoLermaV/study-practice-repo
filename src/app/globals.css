@@ -389,6 +389,17 @@
   }
 }
 
+/* KaTeX: wide equations scroll in place on phones instead of widening the page */
+.topic-content .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+  margin: 1.25rem 0;
+}
+.topic-content .katex {
+  font-size: 1.05em;
+}
+
 /* Animations */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
