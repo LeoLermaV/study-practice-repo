@@ -5,10 +5,13 @@ import { TopBar } from "@/components/layout/TopBar";
 import { BottomTabs } from "@/components/layout/BottomTabs";
 import { CommandPalette } from "@/components/search/CommandPalette";
 import { SyncProvider } from "@/components/layout/SyncProvider";
+import { OfflineSupport } from "@/components/layout/OfflineSupport";
 
 export const metadata: Metadata = {
   title: "FAANG Study",
   description: "Study platform for FAANG interview preparation",
+  applicationName: "FAANG Study",
+  appleWebApp: { capable: true, title: "FAANG Study", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -29,6 +32,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <ThemeProvider>
           <SyncProvider />
+          <OfflineSupport />
           <CommandPalette />
           <TopBar />
           <main className="mx-auto w-full max-w-[1240px] px-4 pb-28 pt-6 sm:px-6 md:pb-20 md:pt-8">

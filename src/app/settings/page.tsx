@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Download, Upload, Trash2, Eye, EyeOff } from 'lucide-react'
@@ -8,6 +8,7 @@ import { getToken, setToken, clearToken, getSyncStatus, pushProgress, pullProgre
 import { BackupError, backupFileName, parseBackup } from '@/lib/progress/backup'
 import { useHydrated } from '@/lib/useLocalStorage'
 import { DAILY_LIMIT_OPTIONS, useDailyLimit } from '@/lib/progress/dailyLimit'
+import { OFFLINE_CACHE_PREFIX, OFFLINE_PAGES_PREFIX } from '@/lib/offline'
 import { cn } from '@/lib/utils'
 
 const THEMES = [
@@ -27,6 +28,7 @@ export default function SettingsPage() {
         <ReviewSettings />
         {hydrated ? <SyncSettings /> : <div className="h-72 animate-pulse rounded-xl bg-secondary" />}
         <BackupSettings />
+        {hydrated && <OfflineSettings />}
         <DataSettings />
         <Panel title="Content">
           <p className="text-sm text-muted-foreground">
@@ -383,6 +385,61 @@ function BackupSettings() {
           {message.text}
         </div>
       )}
+    </Panel>
+  )
+}
+
+async function countSavedPages(): Promise<number> {
+  let total = 0
+  for (const name of await caches.keys()) {
+    if (name.startsWith(OFFLINE_PAGES_PREFIX)) total += (await (await caches.open(name)).keys()).length
+  }
+  return total
+}
+
+function OfflineSettings() {
+  const supported = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'caches' in window
+  const active = supported && process.env.NODE_ENV === 'production'
+  const [saved, setSaved] = useState<number | null>(null)
+  const [cleared, setCleared] = useState(false)
+
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    countSavedPages().then((n) => { if (!cancelled) setSaved(n) }).catch(() => { if (!cancelled) setSaved(0) })
+    return () => { cancelled = true }
+  }, [active, cleared])
+
+  const clear = async () => {
+    for (const name of await caches.keys()) {
+      if (name.startsWith(OFFLINE_CACHE_PREFIX)) await caches.delete(name)
+    }
+    setCleared((c) => !c)
+  }
+
+  return (
+    <Panel title="Offline reading">
+      <p className="text-sm text-muted-foreground">
+        Topics you open, and your re-reads for today and the next two days, are saved on this device so you can read them without a
+        connection.
+      </p>
+      {!supported ? (
+        <p className="mt-3 text-[13px] text-muted-foreground">This browser does not support offline reading.</p>
+      ) : !active ? (
+        <p className="mt-3 text-[13px] text-muted-foreground">Offline reading is switched on in the published app, not in development.</p>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm">
+            {saved === null ? 'Counting saved pages…' : `${saved} ${saved === 1 ? 'page' : 'pages'} saved for offline reading`}
+          </span>
+          <Button variant="outline" size="sm" className="rounded-lg" onClick={clear} disabled={!saved}>
+            Clear offline copies
+          </Button>
+        </div>
+      )}
+      <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+        Install it as an app: on iPhone, Share → Add to Home Screen. In Chrome on Android or desktop, use Install app in the browser menu.
+      </p>
     </Panel>
   )
 }

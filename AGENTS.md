@@ -26,7 +26,7 @@ npm run lint      # ESLint (eslint-config-next, flat config in eslint.config.mjs
 ## Deployment
 
 GitHub Pages via `.github/workflows/deploy.yml`:
-1. CI runs `npm ci && npm run lint && npm test && npm run ingest && npm run build` — a lint error or failing test stops the deploy.
+1. CI runs `npm ci && npm run lint && npm test && npm run ingest && npm run build` — a lint error or failing test stops the deploy. Ingest checks out the commits in `scripts/source-pins.json`, so a deploy never pulls new upstream content by itself.
 2. `BASE_PATH=/study-practice-repo` is set as an env var in the workflow → consumed by `next.config.ts` (`basePath: process.env.BASE_PATH ?? ""`).
 3. The `out/` directory is uploaded as a Pages artifact and deployed.
 4. Live site: https://leolermav.github.io/study-practice-repo/
@@ -50,6 +50,10 @@ For local builds with the same `basePath`, run `BASE_PATH=/study-practice-repo n
 - Flashcards with four-way SRS rating
 - Pomodoro timer as a top-bar pill with BroadcastChannel cross-tab sync
 - Light/dark theme via `next-themes` (`defaultTheme="system"`, `.dark` class)
+- Maths via KaTeX (`remark-math` + `rehype-katex`); `$$…$$` everywhere, single-dollar `$…$` only for hello-algo (elsewhere `$` is currency)
+- Topic pages: "On this page" outline (heading ids from `remarkOutline`), notes shown at the top when due, "Next due" link after rating
+- Optional daily re-reading limit (localStorage `review:daily-limit`), applied by `todaysQueue` everywhere due topics are listed
+- Installable PWA with offline reading: `app/manifest.ts`, `public/sw.js` (published builds only), registered by `OfflineSupport`
 - Knowledge graph (`@xyflow/react`, `/graph`) — still built, but removed from navigation
 
 ### Key file map
@@ -76,6 +80,13 @@ For local builds with the same `basePath`, run `BASE_PATH=/study-practice-repo n
 | `src/lib/progress/merge.ts` / `sync.ts` | CRDT-style entry merge; GitHub Gist push/pull + auto-sync |
 | `src/lib/progress/backup.ts` | `parseBackup` (zod-validated JSON backup, same shape as `SyncPayload`) + `backupFileName`; import goes through `importProgress`, so it merges |
 | `src/lib/useLocalStorage.ts` | `useLocalStorage` (hydration-safe localStorage state) and `useHydrated` |
+| `src/lib/content/topicLookup.ts` | `loadSearchData()` — one fetch of `search-index.json` shared by palette, nav count and next-due link: `lookup` (every topic by slug) + a MiniSearch `index` |
+| `src/lib/content/markdown.ts` | `prepareMarkdown` (brace escaping that skips code and maths, decodes entities in maths), `usesInlineDollarMath`, `convertMkDocsAdmonitions` (hello-algo callouts → blockquotes) — used by ingest |
+| `src/lib/content/outline.ts` / `headings.ts` | `remarkOutline` (heading ids + outline) for topic pages; `extractHeadings` (plain-text h2–h4) for the search index |
+| `src/lib/progress/dailyLimit.ts` | `useDailyLimit()`; `todaysQueue` in `status.ts` applies it |
+| `src/lib/recent.ts` | Recently opened topics (`library:recent`) + `RecordVisit` |
+| `src/lib/offline.ts` / `components/layout/OfflineSupport.tsx` / `public/sw.js` | Which topics to keep offline; service worker registration and messaging; the worker itself |
+| `scripts/git-source.ts` / `scripts/source-pins.json` / `scripts/update-pins.ts` | Upstream repos pinned to commits; `syncSource` checks out the pin; `npm run pins:update` bumps them |
 | `src/components/library/*` | `Library`, `CategoryView`, `DuePanel`/`DueBanner`, `StatusIcon` |
 | `src/components/review/ReviewList.tsx` | `/review` page body |
 | `src/components/topic/TopicPageContent.tsx` | Topic page renderer, `supplementMap`, MDX body, breadcrumb, related topics, prev/next |
@@ -105,7 +116,7 @@ For local builds with the same `basePath`, run `BASE_PATH=/study-practice-repo n
 | `/flashcards` | Static | Flashcard study mode with SRS — category selector then `CardDeck` |
 | `/progress` | Static | Stats, recent activity, 365-day heatmap, by-category bars, 7-day due forecast |
 | `/search` | Static | Client-side search page |
-| `/settings` | Static | Appearance (System/Light/Dark), Sync (token, push/pull, auto-sync), Backup (export/import JSON), Clear data, content sources |
+| `/settings` | Static | Appearance, Review (daily limit), Sync, Backup (export/import JSON), Offline reading (saved pages, clear), Clear data, content sources |
 | `/graph` | Static | Knowledge graph — not linked from the UI |
 
 Category and topic routes have a `loading.tsx`; category pages link sections as `/<category>#section-<id>` (the legacy `?section=` form still works).
@@ -335,7 +346,7 @@ Light and dark. Tokens live in `src/app/globals.css`: the light palette on `:roo
 3. **`remark-gfm` is required for tables** in MDX compilation. Tables without it silently render as paragraphs.
 4. **No `@tailwindcss/typography`** — typography is hand-rolled in the `.topic-content` CSS class. Add prose-related styles there, not as a new plugin.
 5. **Brace escaping** — `{` and `}` in MDX body must be escaped as `\{` / `\}`. This is done centrally in `scripts/ingest.ts:42` using a `(?<!\\)` lookbehind, so adapters should write raw braces.
-6. **`<` escaping** — `<` in MDX body must be `&lt;`. The generic ingest step does not do this — it's per-adapter where needed (`dsa-supplements.ts` escapes in `content()`; `hello-algo.ts` escapes during parsing). When you add a new adapter, check whether your raw body contains `<` and add the escape yourself.
+6. **Escaping** — topics compile with `format: 'md'`. Ingest's `prepareMarkdown` escapes braces in prose but not in code or maths (KaTeX needs `\begin{align*}`), and decodes `&lt;`/`&gt;`/`&amp;` inside maths. `<` in MDX body must be `&lt;`. The generic ingest step does not do this — it's per-adapter where needed (`dsa-supplements.ts` escapes in `content()`; `hello-algo.ts` escapes during parsing). When you add a new adapter, check whether your raw body contains `<` and add the escape yourself.
 7. **`BroadcastChannel`** — browser-only Web API. Always use it inside `useEffect` / a `'use client'` component. Don't import it at module scope.
 8. **All `[slug]` pages have `generateStaticParams()`** — required because `next.config.ts` sets `output: 'export'`. If you add a new `[slug]` route, `generateStaticParams` returning an empty array is fine but it must exist.
 9. **Topic page content max-width**: 680px for optimal reading line length — don't widen this.
@@ -346,6 +357,7 @@ Light and dark. Tokens live in `src/app/globals.css`: the light palette on `:roo
 
 14. **Stale dev styles or data** — the dev server caches compiled CSS in `.next/dev` and topic data in memory (`fs.ts`, `library.ts`). After `npm run ingest` or a git operation that swaps files under a running server, restart it; if styles are still old, stop it and delete `.next/dev`.
 15. **Dev indicator** — Next's dev-mode "N" badge sits bottom-left, over the phone tab bar's Library tab. Production builds don't have it; `devIndicators: false` in `next.config.ts` would hide it in dev.
+16. **Service worker** — registered only in production builds (`OfflineSupport`), scope = base path. Pages are network-first (3 s grace), `/_next/static` cache-first. When changing caching behaviour, bump `VERSION` in `public/sw.js` so old caches are dropped. Test offline behaviour against `BASE_PATH=/study-practice-repo npm run build` output, not the dev server.
 
 ## Content gotchas
 
@@ -360,6 +372,9 @@ Light and dark. Tokens live in `src/app/globals.css`: the light palette on `:roo
 9. **Section order is reading order** — `orderedSlugs` walks `sectionsByCategory` in order, then appends chapter summaries and leftovers. Reordering sections or changing a section's sort changes both the library and prev/next navigation.
 10. **`sourceRepos` is stripped from JSON** — `ingest.ts:47` deletes `sourceRepos` before writing the sidecar `<slug>.json` (information-density; the frontmatter in the `.mdx` keeps it).
 11. **Content directory is gitignored** — after `npm run ingest`, `src/content/` and `public/search-index.json` + `public/topics-graph.json` exist locally; they're not committed. A fresh clone has none of them. Don't commit a `.mdx` meant to be ingested — add an adapter.
+
+12. **Upstream pins** — adapters get content via `syncSource`, which checks out the pinned commit (no network if the cache already matches). To take new upstream content: `npm run pins:update`, then `npm run ingest`, and read its "slugs no longer exist" warning before deploying — progress stored under a removed slug shows up on the Progress page as missing.
+13. **hello-algo callouts** — MkDocs `!!! type "Title"` blocks become blockquotes (`convertMkDocsAdmonitions`) before the adapter's global `<`/`>` escaping; line-start `&gt;` markers are restored afterwards.
 
 ## Remaining priorities
 
@@ -379,5 +394,6 @@ The git log should be the authoritative source for "what was just done". Cross-r
 | `npm run ingest` | Pull repos + generate `src/content/`, `public/search-index.json`, `public/topics-graph.json` |
 | `npm run lint` | ESLint via `eslint-config-next` (flat config in `eslint.config.mjs`) |
 | `npm test` | Vitest (`src/**/*.test.ts`) |
+| `npm run pins:update` | Move upstream pins to each repo's latest commit (then re-run `ingest`) |
 | `BASE_PATH=/study-practice-repo npm run build` | Local build matching the deployed URL prefix |
 | `npx getdesign@latest add <name>` | Install a DESIGN.md (from getdesign.md) |
