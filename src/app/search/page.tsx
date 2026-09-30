@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import MiniSearch from 'minisearch'
+import MiniSearch, { type Options } from 'minisearch'
+import { searchIndexOptions } from '@/lib/content/search'
 import type { TopicMeta, Category } from '@/lib/content/types'
 import { assetPath } from '@/lib/utils'
 import { categoryColor, categoryShortTitles, isListedTopic } from '@/lib/content/sections'
@@ -21,12 +22,7 @@ export default function SearchPage() {
       .then((r) => r.text())
       .then((json) => {
         if (cancelled) return
-        setIndex(
-          MiniSearch.loadJSON<Hit>(json, {
-            fields: ['title', 'tags'],
-            storeFields: ['slug', 'title', 'category', 'difficulty', 'estimatedReadingTime'],
-          })
-        )
+        setIndex(MiniSearch.loadJSON<Hit>(json, searchIndexOptions as Options<Hit>))
       })
       .catch(() => { if (!cancelled) setFailed(true) })
     return () => { cancelled = true }
@@ -35,7 +31,7 @@ export default function SearchPage() {
   const results = useMemo(() => {
     const q = query.trim()
     if (!index || !q) return []
-    return (index.search(q, { prefix: true, fuzzy: 0.2 }) as unknown as Hit[]).filter((h) => isListedTopic(h.slug))
+    return (index.search(q) as unknown as Hit[]).filter((h) => isListedTopic(h.slug))
   }, [index, query])
 
   return (

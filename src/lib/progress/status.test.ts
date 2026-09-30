@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { ProgressEntry } from '../content/types'
-import { topicStatus, isDue, dueEntries, upcomingEntries, reviewLabel, lateLabel, todaysQueue } from './status'
+import { topicStatus, isDue, dueEntries, upcomingEntries, reviewLabel, lateLabel, todaysQueue, staggeredFirstReviews } from './status'
 import { RECALL_OPTIONS, previewIntervals, formatInterval, formatDueIn } from './recall'
 
 const NOW = new Date(2026, 8, 30, 12, 0, 0).getTime()
@@ -142,5 +142,17 @@ describe('todaysQueue', () => {
     const yesterday = entry('y', { studiedAt: 1, practicedAt: NOW - DAY, nextReviewDue: NOW + DAY })
     const q = todaysQueue([...progress, ...today, yesterday], NOW, 2)
     expect(q).toMatchObject({ entries: [], waiting: 5, ratedToday: 2 })
+  })
+})
+
+describe('staggeredFirstReviews', () => {
+  it('spreads a batch over days, perDay at a time', () => {
+    expect(staggeredFirstReviews(7, 3)).toEqual([1, 1, 1, 2, 2, 2, 3])
+    expect(staggeredFirstReviews(2, 3)).toEqual([1, 1])
+  })
+
+  it('handles empty batches and silly perDay values', () => {
+    expect(staggeredFirstReviews(0, 3)).toEqual([])
+    expect(staggeredFirstReviews(2, 0)).toEqual([1, 2])
   })
 })

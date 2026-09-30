@@ -5,6 +5,7 @@ import { notifyProgressChanged } from './events'
 import { streakFromDates } from './streak'
 import { normalizeEntry } from './merge'
 import { isInRotation } from './queue'
+import { staggeredFirstReviews } from './status'
 import { DEFAULT_EASE, backfillSchedule, initialSchedule, nextSchedule, type Rating } from './scheduler'
 
 const PROGRESS_PREFIX = 'progress:'
@@ -113,6 +114,40 @@ export async function markStudied(slug: string): Promise<ProgressEntry> {
   autoPush()
   notifyProgressChanged()
   return entry
+}
+
+/**
+ * Adds several topics to the rotation at once (e.g. a whole library section),
+ * spreading first re-reads `perDay` per day. Topics already in the rotation
+ * are left alone. Returns the entries that were added.
+ */
+export async function markManyStudied(slugs: string[], perDay = 3): Promise<ProgressEntry[]> {
+  const now = Date.now()
+  const pending: { slug: string; base: ProgressEntry }[] = []
+  for (const slug of new Set(slugs)) {
+    const existing = await getProgress(slug)
+    if (!isInRotation(existing)) pending.push({ slug, base: existing ?? freshEntry(slug, now) })
+  }
+  const offsets = staggeredFirstReviews(pending.length, perDay)
+  const added: ProgressEntry[] = []
+  for (const [i, { slug, base }] of pending.entries()) {
+    const entry: ProgressEntry = {
+      ...base,
+      slug,
+      readAt: base.readAt ?? now,
+      studiedAt: now,
+      nextReviewDue: now + offsets[i] * DAY_MS,
+      intervalDays: offsets[i],
+    }
+    await setProgress(slug, entry)
+    added.push(entry)
+  }
+  if (added.length > 0) {
+    await logStudyDay(now)
+    autoPush()
+    notifyProgressChanged()
+  }
+  return added
 }
 
 /**

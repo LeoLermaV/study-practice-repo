@@ -1,21 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import MiniSearch from 'minisearch'
 import type { Category, TopicMeta } from './types'
 import { assetPath } from '../utils'
+import { searchIndexOptions, type SearchDocument } from './search'
 
 export type LookupTopic = Pick<TopicMeta, 'slug' | 'title' | 'category' | 'tags' | 'difficulty'> & {
   estimatedReadingTime?: number
 }
 
-let pending: Promise<Map<string, LookupTopic>> | null = null
+export interface SearchData {
+  lookup: Map<string, LookupTopic>
+  index: MiniSearch<SearchDocument>
+}
+
+let pending: Promise<SearchData> | null = null
 
 /**
- * Every topic (listed or not) by slug, from the search index's stored fields.
- * Fetched once per page load and shared: the command palette, topic pages and
- * the nav all read it.
+ * The search index, fetched once per page load and shared: `lookup` has every
+ * topic (listed or not) by slug; `index` is the MiniSearch instance, which also
+ * matches section headings.
  */
-export function loadTopicLookup(): Promise<Map<string, LookupTopic>> {
+export function loadSearchData(): Promise<SearchData> {
   if (!pending) {
     pending = fetch(assetPath('/search-index.json'))
       .then((r) => {
@@ -24,7 +31,10 @@ export function loadTopicLookup(): Promise<Map<string, LookupTopic>> {
       })
       .then((data) => {
         const stored = data?.storedFields ? (Object.values(data.storedFields) as LookupTopic[]) : []
-        return new Map(stored.filter((t) => t.slug).map((t) => [t.slug, t]))
+        return {
+          lookup: new Map(stored.filter((t) => t.slug).map((t) => [t.slug, t])),
+          index: MiniSearch.loadJS<SearchDocument>(data, searchIndexOptions),
+        }
       })
       .catch((e) => {
         pending = null // allow a retry on the next call
@@ -32,6 +42,10 @@ export function loadTopicLookup(): Promise<Map<string, LookupTopic>> {
       })
   }
   return pending
+}
+
+export function loadTopicLookup(): Promise<Map<string, LookupTopic>> {
+  return loadSearchData().then((d) => d.lookup)
 }
 
 export function useTopicLookup(): Map<string, LookupTopic> | null {

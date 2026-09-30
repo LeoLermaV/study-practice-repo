@@ -8,6 +8,7 @@ import type { LibraryCategory, LibrarySection, LibraryTopic } from '@/lib/conten
 import { categoryTitles } from '@/lib/content/sections'
 import { cn } from '@/lib/utils'
 import { isDue, topicStatus, type TopicStatus } from '@/lib/progress/status'
+import { markManyStudied } from '@/lib/progress/db'
 import type { ProgressState } from '@/lib/progress/useProgress'
 import { readLocalStorage, useLocalStorage } from '@/lib/useLocalStorage'
 import { StatusIcon } from './StatusIcon'
@@ -16,6 +17,8 @@ import { countStudied, sectionTopics } from './utils'
 const OPEN_SECTIONS_KEY = 'library:open-sections'
 /** Sections longer than this start collapsed. */
 const LARGE_SECTION = 20
+/** First re-reads per day when a whole section is marked studied. */
+const BULK_PER_DAY = 3
 
 type StatusFilter = 'all' | TopicStatus
 
@@ -42,6 +45,8 @@ export function CategoryView({ category, progress }: { category: LibraryCategory
   const [rawOpen, setRawOpen] = useLocalStorage(OPEN_SECTIONS_KEY)
   const openState = useMemo(() => parseOpenState(rawOpen), [rawOpen])
   const [variantOn, setVariantOn] = useState<Record<string, boolean>>({})
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [bulk, setBulk] = useState<{ sectionId: string; text: string; ok: boolean } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const key = (sectionId: string) => `${category.id}:${sectionId}`
@@ -88,6 +93,16 @@ export function CategoryView({ category, progress }: { category: LibraryCategory
 
   const setOpen = (patch: Record<string, boolean>) => {
     setRawOpen(JSON.stringify({ ...openState, ...patch }))
+  }
+
+  const markSection = async (sectionId: string, slugs: string[]) => {
+    setConfirming(null)
+    try {
+      const added = await markManyStudied(slugs, BULK_PER_DAY)
+      setBulk({ sectionId, ok: true, text: `Added ${added.length} ${added.length === 1 ? 'topic' : 'topics'} to your re-reading schedule.` })
+    } catch (e) {
+      setBulk({ sectionId, ok: false, text: `Could not save: ${(e as Error).message}` })
+    }
   }
 
   const studied = countStudied(category, progress)
@@ -207,6 +222,14 @@ export function CategoryView({ category, progress }: { category: LibraryCategory
                 {open && (
                   <div className="pb-3 sm:pl-[26px]">
                     <p className="-mt-1.5 mb-2 text-[13px] text-muted-foreground">{section.description}</p>
+                    <SectionBulk
+                      pending={progress.loaded && !filtering ? base.filter((t) => statusOf(t.slug) !== 'studied').map((t) => t.slug) : []}
+                      confirming={confirming === section.id}
+                      result={bulk?.sectionId === section.id ? bulk : null}
+                      onAsk={() => { setBulk(null); setConfirming(section.id) }}
+                      onCancel={() => setConfirming(null)}
+                      onConfirm={(slugs) => markSection(section.id, slugs)}
+                    />
                     {section.variant && (
                       <div role="group" aria-label="Topic set" className="mb-2 flex gap-1.5">
                         {[false, true].map((v) => (
@@ -243,6 +266,47 @@ export function CategoryView({ category, progress }: { category: LibraryCategory
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function SectionBulk({
+  pending,
+  confirming,
+  result,
+  onAsk,
+  onCancel,
+  onConfirm,
+}: {
+  pending: string[]
+  confirming: boolean
+  result: { text: string; ok: boolean } | null
+  onAsk: () => void
+  onCancel: () => void
+  onConfirm: (slugs: string[]) => void
+}) {
+  if (result) {
+    return <p role="status" className={cn('mb-2 text-[12.5px]', result.ok ? 'text-success' : 'text-destructive')}>{result.text}</p>
+  }
+  if (pending.length === 0) return null
+  const days = Math.ceil(pending.length / BULK_PER_DAY)
+  if (!confirming) {
+    return (
+      <button type="button" onClick={onAsk} className="mb-2 text-[12.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+        Mark {pending.length === 1 ? 'the remaining topic' : `all ${pending.length} remaining`} as studied
+      </button>
+    )
+  }
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-secondary px-3 py-2 text-[13px]">
+      <span className="text-foreground">
+        Add {pending.length} {pending.length === 1 ? 'topic' : 'topics'} to your re-reading schedule? First re-reads are spread over{' '}
+        {days === 1 ? 'tomorrow' : `the next ${days} days`}.
+      </span>
+      <span className="flex gap-3">
+        <button type="button" onClick={() => onConfirm(pending)} className="font-medium text-brand hover:underline">Add them</button>
+        <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground">Cancel</button>
+      </span>
     </div>
   )
 }

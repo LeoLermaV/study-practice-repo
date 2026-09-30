@@ -9,6 +9,7 @@ import { isInRotation } from '@/lib/progress/queue'
 import { formatDueIn } from '@/lib/progress/recall'
 import { lateLabel, reviewLabel, todaysQueue, upcomingEntries } from '@/lib/progress/status'
 import { useDailyLimit } from '@/lib/progress/dailyLimit'
+import { useRecentTopics } from '@/lib/recent'
 import type { IndexedTopic, ProgressState } from '@/lib/progress/useProgress'
 import { StatusLegend } from './StatusIcon'
 import { topicHref } from './utils'
@@ -72,6 +73,10 @@ export function DueBanner({ progress, index }: { progress: ProgressState; index:
 export function DuePanel({ progress, index }: { progress: ProgressState; index: Map<string, IndexedTopic> }) {
   const [limit] = useDailyLimit()
   const { items: due, waiting } = dueItems(progress, index, limit)
+  const recent = useRecentTopics()
+    .map((slug) => index.get(slug))
+    .filter((t): t is IndexedTopic => t !== undefined)
+    .slice(0, 5)
   const [streak, setStreak] = useState<number | null>(null)
 
   useEffect(() => {
@@ -137,6 +142,21 @@ export function DuePanel({ progress, index }: { progress: ProgressState; index: 
             </>
           )}
         </div>
+        {recent.length > 0 && (
+          <div className="px-1">
+            <h2 className="mb-1.5 text-[13px] font-medium">Recently opened</h2>
+            <ul>
+              {recent.map((t) => (
+                <li key={t.slug}>
+                  <Link href={topicHref(t)} className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                    <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(t.category) }} aria-hidden />
+                    <span className="truncate">{t.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2.5 px-1">
           <Stat value={streak ?? '–'} label="day streak" />
           <Stat value={progress.loaded ? inReview : '–'} label="in review" />
@@ -156,5 +176,18 @@ export function Stat({ value, label }: { value: number | string; label: string }
       <b className="block font-mono text-xl font-semibold tracking-[-0.02em] tabular-nums">{value}</b>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
+  )
+}
+
+/** One-line "Continue" link for screens without the side panel. */
+export function ContinueLink({ index }: { index: Map<string, IndexedTopic> }) {
+  const last = useRecentTopics().map((slug) => index.get(slug)).find((t): t is IndexedTopic => t !== undefined)
+  if (!last) return null
+  return (
+    <Link href={topicHref(last)} className="mb-4 flex max-w-full items-center gap-2 text-[13.5px] xl:hidden">
+      <span className="shrink-0 text-muted-foreground">Continue:</span>
+      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(last.category) }} aria-hidden />
+      <span className="truncate font-medium text-foreground hover:underline">{last.title}</span>
+    </Link>
   )
 }

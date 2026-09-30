@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useProgress, useTopicIndex, type ProgressState } from '@/lib/progress/useProgress'
 import { useLocalStorage } from '@/lib/useLocalStorage'
 import { CategoryView } from './CategoryView'
-import { DueBanner, DuePanel } from './DuePanel'
+import { ContinueLink, DueBanner, DuePanel } from './DuePanel'
 import { countStudied } from './utils'
 
 const LAST_CATEGORY_KEY = 'library:last-category'
@@ -41,6 +41,7 @@ export function Library({ data, category: routeCategory }: { data: LibraryData; 
       <CategoryRail data={data} current={category} progress={progress} />
       <div className="min-w-0">
         <DueBanner progress={progress} index={index} />
+        <ContinueLink index={index} />
         <CategoryChips data={data} current={category} />
         {current ? <CategoryView key={current.id} category={current} progress={progress} /> : <LibrarySkeleton />}
       </div>

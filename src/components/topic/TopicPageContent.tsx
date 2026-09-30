@@ -11,6 +11,7 @@ import type { TopicMeta, Category } from '@/lib/content/types'
 import { AIPracticeButton } from '@/components/topic/AIPracticeButton'
 import { OutlineDisclosure, OutlineRail } from '@/components/topic/Outline'
 import { remarkOutline, type OutlineItem } from '@/lib/content/outline'
+import { RecordVisit } from '@/lib/recent'
 import { DueNotes, ReviewPanel, ReviewStatus } from '@/components/progress/ReviewPanel'
 
 const supplementMap: Record<string, string[]> = {
@@ -76,6 +77,7 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
 
   return (
     <article className="relative mx-auto max-w-[680px] animate-fade-in">
+      <RecordVisit slug={slug} />
       <OutlineRail items={outline} />
       <nav aria-label="Breadcrumb" className="mb-5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-muted-foreground">
         <Link href="/" className="hover:text-foreground">Library</Link>

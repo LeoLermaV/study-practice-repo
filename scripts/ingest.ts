@@ -4,6 +4,7 @@ import { execSync } from 'child_process'
 import type { TopicMeta } from '../src/lib/content/types'
 import type { SourceAdapter } from './adapters/base'
 import { createSearchIndex } from '../src/lib/content/search'
+import { extractHeadings } from '../src/lib/content/headings'
 import { buildTopicGraph } from '../src/lib/content/topics'
 
 const cacheDir = path.join(process.cwd(), '.cache', 'repos')
@@ -175,7 +176,13 @@ async function main() {
   const topics = getAllTopics()
   console.log(`  Total topics: ${topics.length}`)
 
-  const searchIndex = createSearchIndex(topics)
+  // Section headings make topics findable by what they cover, not only their title.
+  const documents = topics.map((t) => {
+    const file = path.join(contentDir, t.category, `${t.slug}.mdx`)
+    const body = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : ''
+    return { ...t, headings: extractHeadings(body).join(' · ') }
+  })
+  const searchIndex = createSearchIndex(documents)
   ensureDir(path.join(process.cwd(), 'public'))
   fs.writeFileSync(
     path.join(process.cwd(), 'public', 'search-index.json'),

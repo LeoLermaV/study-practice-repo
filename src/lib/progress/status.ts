@@ -90,3 +90,13 @@ export function todaysQueue(progress: ProgressEntry[], now: number, limit: numbe
   const entries = due.slice(0, allowance)
   return { entries, waiting: due.length - entries.length, ratedToday }
 }
+
+/**
+ * Days until the first re-read for a batch of topics marked studied at once:
+ * `perDay` topics tomorrow, the next `perDay` the day after, and so on, so a
+ * whole section does not come due on the same morning.
+ */
+export function staggeredFirstReviews(count: number, perDay: number): number[] {
+  const step = Math.max(1, Math.floor(perDay))
+  return Array.from({ length: Math.max(0, count) }, (_, i) => 1 + Math.floor(i / step))
+}
