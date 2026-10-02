@@ -1,8 +1,11 @@
 import { get, set, keys } from 'idb-keyval'
 import type { ProgressEntry, PracticeNote, StudyStats } from '../content/types'
 import { autoPush } from './sync'
+import { notifyProgressChanged } from './events'
+import { streakFromDates } from './streak'
 import { normalizeEntry } from './merge'
 import { isInRotation } from './queue'
+import { staggeredFirstReviews } from './status'
 import { DEFAULT_EASE, backfillSchedule, initialSchedule, nextSchedule, type Rating } from './scheduler'
 
 const PROGRESS_PREFIX = 'progress:'
@@ -88,6 +91,7 @@ export async function markRead(slug: string): Promise<ProgressEntry> {
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -108,7 +112,42 @@ export async function markStudied(slug: string): Promise<ProgressEntry> {
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
+}
+
+/**
+ * Adds several topics to the rotation at once (e.g. a whole library section),
+ * spreading first re-reads `perDay` per day. Topics already in the rotation
+ * are left alone. Returns the entries that were added.
+ */
+export async function markManyStudied(slugs: string[], perDay = 3): Promise<ProgressEntry[]> {
+  const now = Date.now()
+  const pending: { slug: string; base: ProgressEntry }[] = []
+  for (const slug of new Set(slugs)) {
+    const existing = await getProgress(slug)
+    if (!isInRotation(existing)) pending.push({ slug, base: existing ?? freshEntry(slug, now) })
+  }
+  const offsets = staggeredFirstReviews(pending.length, perDay)
+  const added: ProgressEntry[] = []
+  for (const [i, { slug, base }] of pending.entries()) {
+    const entry: ProgressEntry = {
+      ...base,
+      slug,
+      readAt: base.readAt ?? now,
+      studiedAt: now,
+      nextReviewDue: now + offsets[i] * DAY_MS,
+      intervalDays: offsets[i],
+    }
+    await setProgress(slug, entry)
+    added.push(entry)
+  }
+  if (added.length > 0) {
+    await logStudyDay(now)
+    autoPush()
+    notifyProgressChanged()
+  }
+  return added
 }
 
 /**
@@ -123,6 +162,7 @@ export async function removeFromRotation(slug: string): Promise<ProgressEntry> {
   const entry: ProgressEntry = { ...base, slug, rotationRemovedAt: now }
   await setProgress(slug, entry)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -150,6 +190,7 @@ export async function rateReview(slug: string, rating: Rating): Promise<Progress
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -173,6 +214,7 @@ export async function addPracticeNote(slug: string, text: string): Promise<Progr
   await setProgress(slug, entry)
   await logStudyDay(now)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -188,6 +230,7 @@ export async function removePracticeNote(slug: string, timestamp: number): Promi
   }
   await setProgress(slug, entry)
   autoPush()
+  notifyProgressChanged()
   return entry
 }
 
@@ -243,18 +286,5 @@ export async function getStudyStats(): Promise<StudyStats> {
 
 async function calculateStreak(): Promise<number> {
   const dates: string[] = await get(STUDY_LOG_KEY) ?? []
-  if (dates.length === 0) return 0
-  const unique = [...new Set(dates)].sort().reverse()
-  let streak = 1
-  for (let i = 1; i < unique.length; i++) {
-    const prev = new Date(unique[i - 1])
-    const curr = new Date(unique[i])
-    const diffDays = (prev.getTime() - curr.getTime()) / 86400000
-    if (Math.round(diffDays) === 1) {
-      streak++
-    } else {
-      break
-    }
-  }
-  return streak
+  return streakFromDates(dates, Date.now())
 }

@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Project overview
 
-FAANG interview study app — Next.js 16 App Router, Tailwind v4, shadcn/ui v4 (@base-ui/react), TypeScript strict. Content is ingested from open-source repos at build time by adapters in `scripts/adapters/`, producing MDX + JSON under `src/content/{category}/` (those files are gitignored — only adapters and ingest logic are in the repo). 472 topics across 5 categories (`system-design` 80, `dsa` 221, `ddia` 153, `behavioral` 11, `cs-fundamentals` 7). Static export — deployed to GitHub Pages via `.github/workflows/deploy.yml`. Progress data lives client-side in IndexedDB, with optional cross-device sync via private GitHub Gists.
+FAANG interview study app — library-first, light/dark, Next.js 16 App Router, Tailwind v4, shadcn/ui v4 (@base-ui/react), TypeScript strict. Content is ingested from open-source repos at build time by adapters in `scripts/adapters/`, producing MDX + JSON under `src/content/{category}/` (those files are gitignored — only adapters and ingest logic are in the repo). 472 topics across 5 categories (`system-design` 80, `dsa` 221, `ddia` 153, `behavioral` 11, `cs-fundamentals` 7). Static export — deployed to GitHub Pages via `.github/workflows/deploy.yml`. Progress data lives client-side in IndexedDB, with optional cross-device sync via private GitHub Gists.
 
 `README.md`, `CLAUDE.md`, `PLAN.md`, `HANDOVER.md`, and `DESIGN.md` are companion docs that overlap with this file for different audiences — this one is the canonical agent reference. When they disagree, trust the code (and this file).
 
@@ -26,7 +26,7 @@ npm run lint      # ESLint (eslint-config-next, flat config in eslint.config.mjs
 ## Deployment
 
 GitHub Pages via `.github/workflows/deploy.yml`:
-1. CI runs `npm ci && npm run ingest && npm run build`.
+1. CI runs `npm ci && npm run lint && npm test && npm run ingest && npm run build` — a lint error or failing test stops the deploy. Ingest checks out the commits in `scripts/source-pins.json`, so a deploy never pulls new upstream content by itself.
 2. `BASE_PATH=/study-practice-repo` is set as an env var in the workflow → consumed by `next.config.ts` (`basePath: process.env.BASE_PATH ?? ""`).
 3. The `out/` directory is uploaded as a Pages artifact and deployed.
 4. Live site: https://leolermav.github.io/study-practice-repo/
@@ -42,13 +42,19 @@ For local builds with the same `basePath`, run `BASE_PATH=/study-practice-repo n
 
 ### Runtime (browser only — there is no server)
 - Static HTML pages pre-rendered at build time
-- Client-side search (cmdk → CommandPalette + MiniSearch over `public/search-index.json`)
+- Library-first UI: `/` and each category route render the same `Library` component (category rail, collapsible sections, filters, re-read panel)
+- Re-reading schedule: "Mark as studied" puts a topic in the rotation; due topics appear on `/review`, in the library's Re-read panel and as the Review count in the nav
+- Client-side search (cmdk → `CommandPalette`, ⌘K or the search button; `/search` page uses MiniSearch) over `public/search-index.json`
 - Progress tracking in IndexedDB via `idb-keyval`
 - Optional GitHub Gist sync (see "Sync" section below)
-- Spaced-repetition daily queue on the home page
-- Flashcards with SRS rating
-- Pomodoro timer with BroadcastChannel cross-tab sync
-- Knowledge graph (`@xyflow/react`) consuming `public/topics-graph.json`
+- Flashcards with four-way SRS rating
+- Pomodoro timer as a top-bar pill with BroadcastChannel cross-tab sync
+- Light/dark theme via `next-themes` (`defaultTheme="system"`, `.dark` class)
+- Maths via KaTeX (`remark-math` + `rehype-katex`); `$$…$$` everywhere, single-dollar `$…$` only for hello-algo (elsewhere `$` is currency)
+- Topic pages: "On this page" outline (heading ids from `remarkOutline`), notes shown at the top when due, "Next due" link after rating
+- Optional daily re-reading limit (localStorage `review:daily-limit`), applied by `todaysQueue` everywhere due topics are listed
+- Installable PWA with offline reading: `app/manifest.ts`, `public/sw.js` (published builds only), registered by `OfflineSupport`
+- Knowledge graph (`@xyflow/react`, `/graph`) — still built, but removed from navigation
 
 ### Key file map
 | Path | Purpose |
@@ -57,46 +63,63 @@ For local builds with the same `basePath`, run `BASE_PATH=/study-practice-repo n
 | `scripts/adapters/base.ts` | `SourceAdapter` interface |
 | `scripts/adapters/*.ts` | One adapter per content source |
 | `src/lib/content/types.ts` | Domain types (`TopicMeta`, `ProgressEntry`, `TopicGraph`, etc.) |
-| `src/lib/content/sections.ts` | `SectionDef` arrays per category — the single source of truth for grouping |
+| `src/lib/content/sections.ts` | `SectionDef` arrays per category plus `groupTopics` / `orderedSlugs` — the single source of truth for grouping and reading order |
+| `src/lib/content/library.ts` | Server-only: `getLibrary()` (slim, serialisable `LibraryData` for client pages), `findTopic(slug)` (cross-category lookup), `placeTopic()` (breadcrumb section + prev/next) |
 | `src/lib/content/fs.ts` | Cached topic file readers (`readTopicMeta`, `readTopicMdx`, `getTopicFiles`) — use these rather than touching `fs` directly in pages |
 | `src/lib/content/topics.ts` | `getAllTopics`, `buildTopicGraph` (server-side, reads from disk) |
-| `src/lib/content/search.ts` | `createSearchIndex` (build-time) + client search helpers |
-| `src/lib/progress/db.ts` | IndexedDB progress mutations + stats/streak calc |
-| `src/lib/progress/queue.ts` | `buildDailyQueue` (home page) |
-| `src/lib/progress/flashcards.ts` | `buildFlashcardQueue` + `nextReviewDue` |
-| `src/lib/progress/merge.ts` | CRDT-style entry merge for sync |
-| `src/lib/progress/sync.ts` | GitHub Gist push/pull + auto-sync orchestration |
-| `src/components/topic/TopicPageContent.tsx` | Topic page renderer, `supplementMap`, MDX body, prev/next nav, Quick Reference |
-| `src/components/layout/CategoryPage.tsx` | Sectioned category listing (used by all 5 category pages) |
-| `src/components/layout/Sidebar.tsx` / `MobileNav.tsx` | Desktop sidebar + mobile Sheet nav; both feed off `sectionsByCategory` |
+| `src/lib/content/search.ts` | `createSearchIndex` (build-time; stores slug, title, category, difficulty, tags, estimatedReadingTime) |
+| `src/lib/content/matchTopic.ts` | Word-based scoring used by the command palette |
+| `src/lib/progress/db.ts` | IndexedDB progress mutations + stats/streak |
+| `src/lib/progress/scheduler.ts` | SM-2 scheduling (`nextSchedule`, ease factor per topic) |
+| `src/lib/progress/queue.ts` | `buildQueue` (daily/review modes, used by flashcards) + `isInRotation` |
+| `src/lib/progress/status.ts` | `topicStatus`, `isDue`, `dueEntries`, `upcomingEntries`, review/late labels |
+| `src/lib/progress/recall.ts` | The three topic-page answers (Fuzzy/Mostly/Solid → hard/good/easy) and interval previews |
+| `src/lib/progress/streak.ts` | `streakFromDates` (pure; used by `getStudyStats`) |
+| `src/lib/progress/events.ts` | `notifyProgressChanged` / `onProgressChanged` — fired by every db mutation and sync pull |
+| `src/lib/progress/useProgress.ts` | Client hooks: `useProgress()` (all entries, live) and `useTopicIndex(data)` |
+| `src/lib/progress/merge.ts` / `sync.ts` | CRDT-style entry merge; GitHub Gist push/pull + auto-sync |
+| `src/lib/progress/backup.ts` | `parseBackup` (zod-validated JSON backup, same shape as `SyncPayload`) + `backupFileName`; import goes through `importProgress`, so it merges |
+| `src/lib/useLocalStorage.ts` | `useLocalStorage` (hydration-safe localStorage state) and `useHydrated` |
+| `src/lib/content/topicLookup.ts` | `loadSearchData()` — one fetch of `search-index.json` shared by palette, nav count and next-due link: `lookup` (every topic by slug) + a MiniSearch `index` |
+| `src/lib/content/markdown.ts` | `prepareMarkdown` (brace escaping that skips code and maths, decodes entities in maths), `usesInlineDollarMath`, `convertMkDocsAdmonitions` (hello-algo callouts → blockquotes) — used by ingest |
+| `src/lib/content/outline.ts` / `headings.ts` | `remarkOutline` (heading ids + outline) for topic pages; `extractHeadings` (plain-text h2–h4) for the search index |
+| `src/lib/progress/dailyLimit.ts` | `useDailyLimit()`; `todaysQueue` in `status.ts` applies it |
+| `src/lib/recent.ts` | Recently opened topics (`library:recent`) + `RecordVisit` |
+| `src/lib/offline.ts` / `components/layout/OfflineSupport.tsx` / `public/sw.js` | Which topics to keep offline; service worker registration and messaging; the worker itself |
+| `scripts/git-source.ts` / `scripts/source-pins.json` / `scripts/update-pins.ts` | Upstream repos pinned to commits; `syncSource` checks out the pin; `npm run pins:update` bumps them |
+| `src/components/library/*` | `Library`, `CategoryView`, `DuePanel`/`DueBanner`, `StatusIcon` |
+| `src/components/review/ReviewList.tsx` | `/review` page body |
+| `src/components/topic/TopicPageContent.tsx` | Topic page renderer, `supplementMap`, MDX body, breadcrumb, related topics, prev/next |
+| `src/components/progress/ReviewPanel.tsx` | End-of-article action (mark studied / rate recall / in review) and header `ReviewStatus` pill; notes |
+| `src/components/layout/TopBar.tsx` / `BottomTabs.tsx` / `nav.ts` | Desktop top bar, phone tab bar, shared nav items + due count |
+| `src/components/layout/ThemeProvider.tsx` / `ThemeToggle.tsx` | next-themes setup and the top-bar light/dark toggle |
 | `src/components/layout/SyncProvider.tsx` | Invisible `'use client'` component in `layout.tsx` — fires `autoPull` on mount and `flushPush` on visibilitychange |
-| `src/components/layout/BrandMark.tsx` | SVG logo mark used in sidebar and home header |
 | `src/components/flashcards/CardDeck.tsx` | Flashcard session UI + keyboard shortcuts |
-| `src/components/pomodoro/PomodoroTimer.tsx` | Fixed bottom-bar timer |
-| `src/components/search/CommandPalette.tsx` | Cmdk search overlay |
-| `src/components/progress/ProgressToggles.tsx` | Read / Studied / Practiced buttons on topic pages |
+| `src/components/pomodoro/PomodoroTimer.tsx` | Top-bar timer pill + panel |
+| `src/components/search/CommandPalette.tsx` | Cmdk search overlay; `openSearch()` in `openSearch.ts` opens it from buttons |
 
 ### Routes
 | Route | Type | Content |
 |-------|------|---------|
-| `/` | Static | Home — stat cards, daily queue, category cards (`tint-*` washes) |
-| `/system-design` | Static | 9 sections: Getting Started, Foundations, Infrastructure, Data Layer, Architecture, Advanced Infrastructure, Security, Case Studies, Interview Practice (59 karan topics + 8 donnemartin solutions + 16 hidden theory) |
+| `/` | Static | Library, reopening the last category visited (`library:last-category` in localStorage; System Design by default) |
+| `/system-design` | Static | Library for System Design: 9 sections (Getting Started … Interview Practice) |
 | `/system-design/[slug]` | SSG | SD topic page |
-| `/ddia` | Static | 12 chapter sections, 153 topics |
+| `/ddia` | Static | Library for DDIA: 12 chapter sections, each led by its chapter overview, then book order |
 | `/ddia/[slug]` | SSG | DDIA chapter/section page |
-| `/dsa` | Static | 8 sections: hello-algo, Advanced Algorithms, Cheatsheets, Python Practice E/M/H, LeetCode Hints, Problem Lists |
+| `/dsa` | Static | Library for DS&A: 10 sections — hello-algo, Advanced Algorithms, Cheatsheets, Python Practice E/M/H, LeetCode Hints, Problem Lists, NeetCode Roadmap (with a Blind 75 toggle), Object-Oriented Design |
 | `/dsa/[slug]` | SSG | DS&A topic page |
-| `/cs-fundamentals` | Static | Single section: "Coding Interview Prep" (7 topics) |
+| `/cs-fundamentals` | Static | Library for CS Fundamentals: "Coding Interview Prep" (7 topics) |
 | `/cs-fundamentals/[slug]` | SSG | CS topic page |
-| `/behavioral` | Static | 2 sections: Interview Guides, Career & Negotiation (11 topics) |
+| `/behavioral` | Static | Library for Behavioral: Interview Guides, Career & Negotiation (11 topics) |
 | `/behavioral/[slug]` | SSG | Behavioral topic page |
+| `/review` | Static | Topics due for re-reading (most overdue first) + what comes up this week |
 | `/flashcards` | Static | Flashcard study mode with SRS — category selector then `CardDeck` |
-| `/graph` | Static | Knowledge graph viz (`@xyflow/react`) |
-| `/search` | Static | Client-side search |
-| `/progress` | Static | Stats dashboard + 365-day heatmap + by-category breakdown + recent activity list with stage filter |
-| `/settings` | Static | Sync (token, push/pull, auto-sync toggle) + Clear Data + content info |
+| `/progress` | Static | Stats, recent activity, 365-day heatmap, by-category bars, 7-day due forecast |
+| `/search` | Static | Client-side search page |
+| `/settings` | Static | Appearance, Review (daily limit), Sync, Backup (export/import JSON), Offline reading (saved pages, clear), Clear data, content sources |
+| `/graph` | Static | Knowledge graph — not linked from the UI |
 
-Every category route (and every `[slug]`) also has a `loading.tsx` for streaming/suspense and no fallback page is needed since the topic pages are pre-rendered at build time.
+Category and topic routes have a `loading.tsx`; category pages link sections as `/<category>#section-<id>` (the legacy `?section=` form still works).
 
 ## Key data types (`src/lib/content/types.ts`)
 
@@ -127,12 +150,16 @@ interface PracticeNote { text: string; timestamp: number }
 interface ProgressEntry {
   slug: string
   readAt: number | null
-  studiedAt: number | null
-  practicedAt: number | null
+  studiedAt: number | null          // last added to the re-reading rotation
+  rotationRemovedAt: number | null  // tombstone; later than studiedAt means "not in rotation"
+  practicedAt: number | null        // last recall rating
   practiceNotes: PracticeNote[]
   reviewCount: number
   nextReviewDue: number
-  deletedNotes: number[]         // tombstones for notes removed via removePracticeNote — keeps merge idempotent
+  deletedNotes: number[]            // tombstones so removed notes stay removed after sync
+  ease: number                      // SM-2, 1.3–2.5, per topic
+  intervalDays: number
+  reps: number
 }
 
 interface StudyStats {
@@ -148,26 +175,25 @@ interface StudyStats {
 
 ## Content sections (`src/lib/content/sections.ts`)
 
-The single source of truth for how topics are grouped into sections on category pages and in the sidebar. Defines:
+The single source of truth for how topics are grouped into sections and in what order they are read. Defines:
 
 ```typescript
 interface SectionDef {
-  label: string          // chapter/section heading text
-  description: string    // shown on the category page
-  icon?: string          // lucide icon name
+  label: string          // section heading text (also the #anchor via sectionId)
+  description: string    // shown when the section is open
   slugPrefix?: string    // topics whose slug starts with this are grouped here
-  slugs: string[]        // explicit slug list when slugPrefix is not used
+  slugs: string[]        // explicit members, in this order
+  match?: (t) => boolean // metadata-based membership (Problem Lists, NeetCode, DDIA chapters)
+  sort?: (a, b) => number              // order for prefix/match sections; default sortOrder, then title
+  variant?: { label: string; match }   // alternative topic set the section can switch to (NeetCode → Blind 75)
 }
 ```
 
-Helpers exported from the same file:
-- `sectionId(label)` — deterministic id for `?section=` URL fragments
-- `categoryTitles` — display name per category (used on topic pages' back-link and elsewhere)
-- `utilitySlugs` — `Set` of `'table-of-contents' | 'references' | 'next-steps'` filtered out of all listings
-- `hiddenSlugs` — `Set` of 16 `donnemartin-*` theory topics excluded from category listings (still reachable via `supplementMap`)
-- `sectionsByCategory` — the per-category `Record<string, SectionDef[]>` consumed by both sidebar and `CategoryPage`
+- `groupTopics(category, topics)` → `{ sections, leftovers }`. A topic belongs to the **first** section that claims it. The library, `/review` lookups and topic-page breadcrumbs all use it. `leftovers` should be empty; anything unclaimed shows as "Other topics".
+- `orderedSlugs(category, topics)` → prev/next reading order: section order (main list, then variant), chapter summaries and leftovers at the end.
+- Also exported: `sectionId(label)`, `categoryOrder`, `categoryTitles` (long), `categoryShortTitles`, `categoryColor(category)` (`var(--cat-<category>)`), `utilitySlugs`, `hiddenSlugs`, `isListedTopic(slug)`.
 
-DSA section drift to watch for: there are now 8 sections in this order — `hello-algo` (slugPrefix `hello-algo-`), `Advanced Algorithms` (explicit list of 8 dsa-supplements slugs), `Cheatsheets` (slugPrefix `cheatsheet-`), `Python Practice — Easy/Medium/Hard` (em-dashes, slugPrefix `python-practice-{easy,medium,hard}-`), `LeetCode Hints` (slugPrefix `leetcode-hint-`), `Problem Lists`.
+Tests live in `sections.test.ts`. DS&A section order: `hello-algo` (prefix), `Advanced Algorithms` (explicit), `Cheatsheets` (prefix), `Python Practice — Easy/Medium/Hard` (explicit lists, em-dashes), `LeetCode Hints` (prefix), `Problem Lists` (topics with `leetcodePatterns`), `NeetCode Roadmap` (`neetcodeRoadmap`, not Blind 75, sorted by roadmap `order`; variant = the Blind 75 pages), `Object-Oriented Design` (prefix `donnemartin-oo-`).
 
 ## Adapters (`scripts/adapters/`)
 
@@ -186,49 +212,50 @@ interface SourceAdapter {
 |---------|--------|:------:|------|
 | `karan.ts` | karanpratapsingh/system-design | 59 SD | Clone repo, parse README.md — headings split into topics |
 | `donnemartin.ts` | donnemartin/system-design-primer | 30 SD | Clone repo, parse README + per-problem solution files. 16 hidden theory topics + 8 interview solutions + 6 OO design topics |
-| `ddia.ts` | Hardcoded TOC + references | 153 DDIA | No repo clone for TOC; additionally clones `ept/ddia-references` to populate per-section "References" sections |
+| `ddia.ts` | Hardcoded TOC + references | 153 DDIA | No repo clone for TOC; additionally clones `ept/ddia-references` to populate per-section "References" sections. Emits `sortOrder` (chapter overview 0, sections 1…n in book order) |
 | `hello-algo.ts` | krahets/hello-algo | 94 DS&A | Clone with `--depth 1 --filter=blob:none` + sparse checkout (repo is 465MB full). Parses `mkdocs.yml` nav + `docs/**/*.md`. Emits `sortOrder` per topic so chapters natural book order is preserved |
 | `dsa-supplements.ts` | Hardcoded | 8 DS&A | No clone. 8 hand-written algorithm deep-dives: shortest paths (Dijkstra/Bellman-Ford/Floyd-Warshall), MST (Kruskal/Prim), fast-slow pointers, Kadane, sliding window template + 3 classic LeetCode problems. Escapes `<` to `&lt;` in `content()` |
 | `seanprashad.ts` | seanprashad/leetcode-patterns | 48 DS&A | Clone repo, parse JSON patterns file |
-| `neetcode.ts` | neetcode-gh/leetcode | 36 DS&A | Clone repo, parse JSON — fits each topic with `neetcodeRoadmap` |
+| `neetcode.ts` | neetcode-gh/leetcode | 36 DS&A | Clone repo, parse JSON. 18 NeetCode 150 group pages + 18 `-blind75` pages. `neetcodeRoadmap.order` = roadmap position (upstream group order); `isBlind75` marks the Blind 75 page, which lists only Blind 75 problems |
 | `yangshun.ts` | yangshun/tech-interview-handbook | 11 BH + 7 CS + cheatsheets | Clone repo, parse `sidebars.js` |
 | `python-practice.ts` | Hardcoded | (_DS&A) | No clone. Python concept refresher topics with concept explanation + code examples + pitfalls + "Before you solve" links. Slugs: `python-practice-easy-*` / `python-practice-medium-*` / `python-practice-hard-*` |
 | `leetcode-hints.ts` | Hardcoded | 25 DS&A | No clone. 25 LeetCode Easy problems, each with a LeetCode URL link, syntax heads-up, and step-by-step hints. Slugs: `leetcode-hint-*`. `content()` prepends the LeetCode link from a hardcoded slug map |
 
-Adapters are registered in order in `scripts/ingest.ts`. That order matters: `buildOrderedSlugs` in `TopicPageContent.tsx` walks `sectionsByCategory` to compute prev/next navigation — so the section/prefix orders above effectively determine the reading order across topics.
+Adapters are registered in order in `scripts/ingest.ts`. Reading order comes from `sectionsByCategory` via `orderedSlugs` (see Content sections), so section order and each section's sort determine prev/next navigation.
 
 ### Quick Reference supplements on topic pages
-`supplementMap` in `TopicPageContent.tsx` (lines ~15-36) hashes a primary topic slug → array of slugs (typically `donnemartin-*`) to surface as a "Quick Reference" card below the main content. Recently also includes a `sliding-window` entry pointing into python-practice and the sliding-window template. Never edit `supplementMap` blindly — it relies on topics existing in the matching category directory.
+`supplementMap` in `TopicPageContent.tsx` maps a primary topic slug → slugs (typically `donnemartin-*`) shown as a "Quick reference" card below the article. Slugs are resolved with `findTopic`, so unknown slugs are skipped rather than linked. Prerequisites and related topics are resolved the same way, which matters because DDIA relates to System Design topics in another category.
 
 ## Progress tracking
 
-IndexedDB via `idb-keyval`. Three *independent* toggles on every topic page — each has its own button (`ProgressToggles.tsx`):
-- **Read** — consumed the content. Button: blue outline/filled.
-- **Studied** — actively worked through it. Button: amber outline/filled.
-- **Practiced** — solved problems. Button: emerald; opens a note dialog.
+IndexedDB via `idb-keyval`, keys `progress:<slug>` plus `study-log` (an array of `Date.toDateString()` values, one per study day; source of the streak, exported with sync payloads).
 
-All keys are prefixed `progress:<slug>`. There is one extra non-progress key: `study-log` — an array of `new Date().toDateString()` strings updated by `logStudyDay()` every time any toggle fires; it's the source of truth for the streak. It is also exported with synced payloads (see Sync).
+The model is a **re-reading rotation**:
+- **Mark as studied** (`markStudied`) adds a topic to the rotation; first re-read is due tomorrow.
+- When due, the topic page asks "How much did you still remember?" with three answers — **Fuzzy / Mostly / Solid** → `rateReview(slug, 'hard' | 'good' | 'easy')`, which reschedules via SM-2. `again` is deliberately not offered on topic pages (it resets and re-shows in 10 minutes); flashcards keep all four.
+- **Remove from review** tombstones rotation membership (`rotationRemovedAt`); history and notes are kept.
+- Library status (`topicStatus`): `studied` = in rotation, `read` = has `readAt` but not in rotation (older entries, or removed from review), `new` = neither. Nothing in the UI calls `markRead` any more.
 
 ### Migration
-`migrateEntry` in `db.ts` auto-upgrades entries with the legacy `status: 'not-started' | 'understood' | 'reviewed' | 'mastered'` shape. Forward-compatible: writes always stamp the new `readAt/studiedAt/practicedAt` and `deletedNotes: []` fields. No data loss.
+`migrateEntry` in `db.ts` upgrades the legacy `status` shape and backfills v2 scheduling fields (`backfillSchedule`). No data loss.
 
 ### `db.ts` public API
 
 | Function | Behavior |
 |----------|---------|
-| `getProgress(slug)` | Read one entry; runs `migrateEntry` on the raw value |
-| `getAllProgress()` | Reads every `progress:*` key through the same migration |
-| `setProgress(slug, entry)` | Low-level write — bypasses migration; only for tests/low-level callers |
-| `markRead(slug)` | Idempotent — no-op if `readAt` already set. Also logs the study day |
-| `markStudied(slug)` | Idempotent — no-op if `studiedAt` already set. Also logs the study day |
-| `markPracticed(slug)` | Increments `reviewCount`; computes `nextReviewDue` via the `intervals = [1,3,7,14,30,60]` table. Also logs the study day |
-| `addPracticeNote(slug, text)` | Appends a note at `Date.now()`; *also* bumps `reviewCount` and recomputes `nextReviewDue` (same as `markPracticed`) |
-| `removePracticeNote(slug, timestamp)` | Removes the note AND appends its timestamp to `deletedNotes`. The tombstone is what stops the note from reappearing after a Gist pull (see Sync). Does not touch `reviewCount` |
-| `getDueTopics()` | Returns entries with `nextReviewDue <= now && practicedAt !== null` |
-| `getStudyStats()` | Aggregates counts; also computes streak via `study-log` |
+| `getProgress(slug)` / `getAllProgress()` | Read through `migrateEntry` |
+| `setProgress(slug, entry)` | Low-level write — no migration, no sync, no event; tests/low-level only |
+| `markRead(slug)` | Idempotent `readAt` stamp (kept for compatibility; unused by the UI) |
+| `markStudied(slug)` | Adds to rotation, due tomorrow; no-op if already in rotation |
+| `removeFromRotation(slug)` | Tombstones rotation membership |
+| `rateReview(slug, rating)` | SM-2 reschedule; joins the rotation if needed |
+| `markPracticed(slug)` | `rateReview(slug, 'good')` |
+| `addPracticeNote` / `removePracticeNote` | Notes; removal writes a tombstone so sync can't resurrect it |
+| `getDueTopics()` | Entries in rotation with `nextReviewDue <= now` |
+| `getStudyStats()` | Counts + streak (`streakFromDates`: consecutive days ending today or yesterday; 0 after a missed day) |
 
-### `autoPush()` is called by every mutation
-`markRead`, `markStudied`, `markPracticed`, and `addPracticeNote` all call `autoPush()` from `sync.ts` at the end. That function is a no-op when no token is saved — so local-only users pay no network cost, and enabling sync requires zero migration. **If you add a new mutation in `db.ts`, remember to call `autoPush()` at the end.**
+### Every mutation calls `autoPush()` and `notifyProgressChanged()`
+`autoPush` is a no-op without a saved token. `notifyProgressChanged` lets mounted views (library, nav badge, review list, topic header) refresh. **If you add a mutation in `db.ts`, call both at the end.**
 
 ## Sync (`src/lib/progress/sync.ts` + `merge.ts`)
 
@@ -264,6 +291,7 @@ When both token and auto-sync are enabled:
 - `SyncProvider` (in `layout.tsx`) calls `autoPull()` on mount → silently imports any remote changes.
 - Each `db.ts` mutation calls `autoPush()` → debounced (2s) so a Read→Studied→Practiced click-through becomes one gist write.
 - `visibilitychange === 'hidden'` flushes any pending debounced push so a tab close doesn't drop it.
+- Applying a pulled payload fires `notifyProgressChanged()`, so open views update without a reload.
 
 ### Sync public API (used by Settings)
 | Export | Purpose |
@@ -277,101 +305,39 @@ When both token and auto-sync are enabled:
 | `exportProgress()` | Snapshot IndexedDB into a `SyncPayload` |
 | `autoPush()`, `autoPull()`, `flushPush()` | Internal hooks called by `db.ts` and `SyncProvider` |
 
-## Queue logic (`src/lib/progress/queue.ts`)
+## Due lists and queues
 
-`buildDailyQueue(topics, progress, maxItems=5)` returns `QueueItem[]` in priority order:
-
-1. **Review** — `practicedAt !== null && nextReviewDue <= now && readAt !== null`
-2. **Practice** — `practicedAt === null && studiedAt !== null`
-3. **Study** — `practicedAt === null && studiedAt === null && readAt !== null`
-4. **New** — Not yet in progress, AND (`prerequisites.length === 0` OR `prerequisites.some(p => completedSlugs.has(p))`), where `completedSlugs` = slugs with `readAt !== null`. Note this is **any** prerequisite read, not **all** — keep that in mind when loosening prerequisite gates.
-
-Sorted by `difficulty` ascending within each bucket. New topics only backfill the remaining slots after Review/Practice/Study; then the whole queue is sliced to `maxItems` (default 5).
-
-## Flashcard mode (`src/lib/progress/flashcards.ts`)
-
-### Queue builder
-`buildFlashcardQueue(topics, progress, maxNew=5)` — similar buckets (due / studied-not-practiced / read-only / fresh), but **does not** gate fresh topics by prerequisites. Fresh topics are sliced to `maxNew` before being appended.
-
-### Rating → nextReviewDue
-```typescript
-function nextReviewDue(reviewCount, ease): number {
-  intervals = [1, 3, 7, 14, 30, 60]             // days
-  multipliers = { again: 0, hard: 0.5, good: 1, easy: 2 }
-  base = intervals[min(reviewCount, intervals.length-1)]
-  days = base * multipliers[ease]
-  return Date.now() + max(days, ease === 'again' ? 0.01 : 0.5) * 86400000
-}
-```
-The `Math.max` floor exists so `again` doesn't schedule a review for the same instant (which the queue would instantly re-surface) — it gets a ~14-minute grace instead. `hard` floors at 12 hours.
+- **Topic pages, library, `/review`, nav badge**: `status.ts` — `isDue(entry, now)` = in rotation and `nextReviewDue <= now`; `dueEntries` sorts most overdue first so the list rotates; `upcomingEntries(progress, now, days)` feeds "Coming up this week".
+- **Flashcards**: `buildQueue(topics, progress, { mode: 'review' })` in `queue.ts` returns every due topic. `daily` mode (reserves slots for unrotated and new material) is kept and tested but no longer rendered.
+- **Scheduling**: `scheduler.ts` `nextSchedule(prev, rating, now)` — SM-2 with a per-topic ease factor (1.3–2.5). First success: 1 day (`easy` 4), second: 6 days, then interval × ease (`hard` ×1.2, `easy` ×ease×1.3). `again` resets reps and re-shows in 10 minutes. Because the first two steps are fixed, the three topic-page answers can preview the same date; the panel says so, since the answer still moves the ease factor.
 
 ### `CardDeck` component (`src/components/flashcards/CardDeck.tsx`)
-- Keyboard shortcuts: Space = flip, 1-4 = rate (again / hard / good / easy)
-- Rating a card also calls `markRead` / `markStudied` / `markPracticed` — so the flashcard mode advances progress toggles, not just SRS scheduling
-- Session summary at the end with rating distribution
-- Category selector on the landing page; "back" returns to the selector
+- Keyboard: Space/Enter flips, 1–4 rates (again / hard / good / easy) via `rateReview`
+- Session summary with rating counts
 
 ## Pomodoro timer (`src/components/pomodoro/PomodoroTimer.tsx`)
 
-### Bottom bar
-Fixed `bottom-0`, 36px, semi-transparent blur, across all pages (rendered in `layout.tsx`).
+### Top-bar pill
+Shows the remaining time; clicking opens a panel with phase, progress, Start/Pause/Resume, Skip, Reset and the three durations. Until hydration a static pill holds the space; `LiveTimer` then reads saved state directly (lazy `useState`) instead of correcting itself in an effect.
 
 ### Features
-- Work / Short Break / Long Break (configurable 1-120 minutes)
-- `BroadcastChannel('pomodoro')` for cross-tab sync — any tab can start/pause/skip and all tabs reflect it
-- localStorage persistence + recovery on mount
-- Web Audio API bell chime (no audio file) — generated in-browser
-- Dashboard: phase indicator, progress bar, timer, cycle count, controls (play/pause, skip, reset)
-- Settings: gear icon → flyout with three number inputs
+- Focus / Short break / Long break (configurable 1–120 minutes), 4 cycles
+- `BroadcastChannel('pomodoro')` for cross-tab sync
+- localStorage persistence (`pomodoro-state`, `pomodoro-config`)
+- Web Audio bell generated in-browser
 
-### Config keys (localStorage)
-- `pomodoro-state` — current timer state (phase, startTime, elapsedBeforePause, paused, cycle, duration)
-- `pomodoro-config` — user preferences `{ work, shortBreak, longBreak }` minutes
+## Design system ("Quiet amber library" — see `DESIGN.md`)
 
-## Design system ("Refined dark study" — see `DESIGN.md`)
+Light and dark. Tokens live in `src/app/globals.css`: the light palette on `:root`, the dark one on `.dark`, mapped to Tailwind in `@theme inline`. **Use semantic tokens — never hardcode hex or Tailwind palette colours.** New colour? Add the token to both palettes first.
 
-Dark-only. Graphite ramp (never pure black), softened ink (never pure white), one accent (`#0099ff`). **Use semantic tokens — never hardcode hex.** When you need a new surface or text role, add it to `globals.css` as a token, then reference it via Tailwind's `--color-*` mapping.
-
-### Colors (dark only — no light mode)
-```
---background: #0e0f13        // canvas (graphite, faint cool cast)
---card: #15171c              // surface-1 (cards, inputs)
---secondary/--muted: #1d2026 // surface-2 (hover fills, badges)
---accent: #23262e            // surface-3 (pressed/active)
---sidebar: #0b0c0f           // shell (sidebar, pomodoro bar) — below canvas
---foreground: #e7e9ee        // ink (headings, UI)
---reading-foreground: #cdd1d9 // long-form body ink (.topic-content)
---muted-foreground: #9aa1ad  // ink-muted
---ink-faint: #646b78         // meta, eyebrows, counts (text-ink-faint)
---border: #262a32            // hairline (cards use border-border/60)
---brand: #0099ff             // links, focus, progress (text-brand, bg-brand/10)
---brand-soft: #58b6ff        // links inside .topic-content
---chart-1..5                 // #0099ff #8b84f5 #c77df0 #eb9a5f #ef7189 (category hues — used by tint-* and progress chips)
-```
-
-### Surfaces & depth
-- All Cards: hairline `border-border/60` + inset top-light, `rounded-xl` (14px). Cards settle on `--card`, not `--background`.
-- Category identity: `.tint-blue / .tint-violet / .tint-magenta / .tint-orange / .tint-coral` — faint radial wash of the category hue over `--card`. `.spotlight-*` names still alias to these.
-- List-row hover: `hover:bg-secondary/50 hover:border-border` (no translate)
-- Category card hover: `hover-lift` (translateY(-1px) + soft shadow)
-
-### Sidebar
-Sidebar uses its own token family (`bg-sidebar`, `border-sidebar-border`, `bg-sidebar-accent`) so it can sit one step darker than the main canvas (`--sidebar: #0b0c0f`) while still using Tailwind's palette utility classes (`--color-sidebar-*` are wired in `@theme inline` in `globals.css`). Don't use `bg-secondary` etc. in the sidebar — use the `sidebar-*` equivalents.
-
-### Typography
-```css
-body { font-size: 16px; line-height: 1.6; font-feature-settings: "cv05","cv11"; }
-/* page titles: 26-28px / 600 / -0.02em; section heads 17px / 600 / -0.01em */
-/* eyebrows: 11px / 600 / uppercase / +0.08-0.1em / text-ink-faint */
-/* .topic-content (MDX reading): 17px / 1.75, 680px measure, tables scroll
-   in place (display:block; overflow-x:auto), code blocks #101216 @ 13px */
-```
-
-### Animations
-- `.animate-fade-in` — 350ms ease-out fade + slide
-- `.animate-scale-in` — 180ms ease-out scale
-- `.hover-lift` — translateY(-1px) + soft shadow (category cards only)
-- Button `active:scale-[0.97]` press effect
+- Surfaces: `bg-background` (canvas), `bg-card` (panels, inputs), `bg-secondary` (hover/selected), `bg-accent` (pressed)
+- Ink: `text-foreground`, `text-reading` (article body), `text-muted-foreground`, `text-ink-faint`
+- Lines: `border-border`, `border-border-strong`
+- Accent: `text-brand` / `bg-brand` + `text-brand-foreground` — links, focus, progress, due, primary action only
+- Categories: `categoryColor(category)` or `bg-cat-<category>` — small dots, never tinted surfaces
+- Semantic: `text-success`, `text-destructive`
+- Type: Helvetica stack (`font-sans`), system mono (`font-mono`, tabular numbers for counts and timers); no web fonts
+- Reading: `.topic-content` — 17px/1.75 at a 680px measure; code, tables and blockquotes all use tokens
 
 ## Framework gotchas
 
@@ -380,14 +346,18 @@ body { font-size: 16px; line-height: 1.6; font-feature-settings: "cv05","cv11"; 
 3. **`remark-gfm` is required for tables** in MDX compilation. Tables without it silently render as paragraphs.
 4. **No `@tailwindcss/typography`** — typography is hand-rolled in the `.topic-content` CSS class. Add prose-related styles there, not as a new plugin.
 5. **Brace escaping** — `{` and `}` in MDX body must be escaped as `\{` / `\}`. This is done centrally in `scripts/ingest.ts:42` using a `(?<!\\)` lookbehind, so adapters should write raw braces.
-6. **`<` escaping** — `<` in MDX body must be `&lt;`. The generic ingest step does not do this — it's per-adapter where needed (`dsa-supplements.ts` escapes in `content()`; `hello-algo.ts` escapes during parsing). When you add a new adapter, check whether your raw body contains `<` and add the escape yourself.
+6. **Escaping** — topics compile with `format: 'md'`. Ingest's `prepareMarkdown` escapes braces in prose but not in code or maths (KaTeX needs `\begin{align*}`), and decodes `&lt;`/`&gt;`/`&amp;` inside maths. `<` in MDX body must be `&lt;`. The generic ingest step does not do this — it's per-adapter where needed (`dsa-supplements.ts` escapes in `content()`; `hello-algo.ts` escapes during parsing). When you add a new adapter, check whether your raw body contains `<` and add the escape yourself.
 7. **`BroadcastChannel`** — browser-only Web API. Always use it inside `useEffect` / a `'use client'` component. Don't import it at module scope.
 8. **All `[slug]` pages have `generateStaticParams()`** — required because `next.config.ts` sets `output: 'export'`. If you add a new `[slug]` route, `generateStaticParams` returning an empty array is fine but it must exist.
 9. **Topic page content max-width**: 680px for optimal reading line length — don't widen this.
-10. **Sidebar tree** auto-expands the current category; manual override via the chevron button. The same `sectionsByCategory` array feeds both Sidebar and `CategoryPage` — when you reorder there, both views move.
-11. **Loading states** — each route has a `loading.tsx`. If you add a new route, copy the pattern; otherwise Next will synthesize a default one that doesn't match the design.
-12. **`fs` usage at build time** — `topics.ts`, `fs.ts`, `search.ts`, and `TopicPageContent.tsx` all call `node:fs` directly. They're safe in SSG because `next build` runs them as server code at build time. *Never* import these from a `'use client'` component — you'll see the `Module not found` ReferenceError on the client. Need data on the client? Fetch `/topics-graph.json` or `/search-index.json` instead.
-13. **`autoPush` cadence** — never call `autoPush()` from a UI component directly. Always go through `db.ts` mutation functions, which call it at the end. Setting `progress:*` keys directly via `idb-keyval` bypasses sync and will not propagate to other devices.
+10. **Library state** — collapsed sections (`library:open-sections`) and the last category (`library:last-category`) live in localStorage via `useLocalStorage`, which returns `null` during SSR/hydration. Don't read localStorage in `useState` initialisers of server-rendered components or set state from it in effects (lint: `react-hooks/set-state-in-effect`); use `useLocalStorage`, or gate a subtree on `useHydrated()` and read storage in lazy initialisers (see Settings and the Pomodoro timer).
+11. **Loading states** — each category, topic and `/review` route has a `loading.tsx`. If you add a new route, copy the pattern; otherwise Next will synthesize a default one that doesn't match the design.
+12. **`fs` usage at build time** — `topics.ts`, `fs.ts`, `library.ts`, `search.ts`, and `TopicPageContent.tsx` all call `node:fs` directly. They're safe in SSG because `next build` runs them as server code at build time. *Never* import these from a `'use client'` component — you'll see the `Module not found` ReferenceError on the client. Need data on the client? Pass `getLibrary()` from the server page (as the library routes do), or fetch `/topics-graph.json` / `/search-index.json`. The search index's documents are under `storedFields` (there is no `documents` key).
+13. **`autoPush` cadence** — never call `autoPush()` or `notifyProgressChanged()` from a UI component directly. Always go through `db.ts` mutation functions, which call it at the end. Setting `progress:*` keys directly via `idb-keyval` bypasses sync and will not propagate to other devices.
+
+14. **Stale dev styles or data** — the dev server caches compiled CSS in `.next/dev` and topic data in memory (`fs.ts`, `library.ts`). After `npm run ingest` or a git operation that swaps files under a running server, restart it; if styles are still old, stop it and delete `.next/dev`.
+15. **Dev indicator** — Next's dev-mode "N" badge sits bottom-left, over the phone tab bar's Library tab. Production builds don't have it; `devIndicators: false` in `next.config.ts` would hide it in dev.
+16. **Service worker** — registered only in production builds (`OfflineSupport`), scope = base path. Pages are network-first (3 s grace), `/_next/static` cache-first. When changing caching behaviour, bump `VERSION` in `public/sw.js` so old caches are dropped. Test offline behaviour against `BASE_PATH=/study-practice-repo npm run build` output, not the dev server.
 
 ## Content gotchas
 
@@ -399,9 +369,12 @@ body { font-size: 16px; line-height: 1.6; font-feature-settings: "cv05","cv11"; 
 6. **DDIA references** — `ddia.ts` additionally clones `ept/ddia-references` during ingest to enrich each chapter with a "References" section.
 7. **Python Practice and LeetCode Hints adapters** — hardcoded (no repo clone). Both have explicit content sections matching their slug prefix. When adding topics, update the adapter and the section in lockstep.
 8. **`dsa-supplements.ts` is hardcoded** — 8 curated algorithm deep-dives. Topics live directly in the `Advanced Algorithms` section in `sections.ts` via an explicit `slugs` array (no prefix-based section).
-9. **Ingest ordering matters** — `buildOrderedSlugs` in `TopicPageContent.tsx` walks `sectionsByCategory` in order, then falls back to leftover files alphabetically. Reordering sections or prefix expansion changes both the sidebar and the prev/next navigation on topic pages.
+9. **Section order is reading order** — `orderedSlugs` walks `sectionsByCategory` in order, then appends chapter summaries and leftovers. Reordering sections or changing a section's sort changes both the library and prev/next navigation.
 10. **`sourceRepos` is stripped from JSON** — `ingest.ts:47` deletes `sourceRepos` before writing the sidecar `<slug>.json` (information-density; the frontmatter in the `.mdx` keeps it).
 11. **Content directory is gitignored** — after `npm run ingest`, `src/content/` and `public/search-index.json` + `public/topics-graph.json` exist locally; they're not committed. A fresh clone has none of them. Don't commit a `.mdx` meant to be ingested — add an adapter.
+
+12. **Upstream pins** — adapters get content via `syncSource`, which checks out the pinned commit (no network if the cache already matches). To take new upstream content: `npm run pins:update`, then `npm run ingest`, and read its "slugs no longer exist" warning before deploying — progress stored under a removed slug shows up on the Progress page as missing.
+13. **hello-algo callouts** — MkDocs `!!! type "Title"` blocks become blockquotes (`convertMkDocsAdmonitions`) before the adapter's global `<`/`>` escaping; line-start `&gt;` markers are restored afterwards.
 
 ## Remaining priorities
 
@@ -420,5 +393,7 @@ The git log should be the authoritative source for "what was just done". Cross-r
 | `npm run build` | Static export into `out/` (must run `ingest` first) |
 | `npm run ingest` | Pull repos + generate `src/content/`, `public/search-index.json`, `public/topics-graph.json` |
 | `npm run lint` | ESLint via `eslint-config-next` (flat config in `eslint.config.mjs`) |
+| `npm test` | Vitest (`src/**/*.test.ts`) |
+| `npm run pins:update` | Move upstream pins to each repo's latest commit (then re-run `ingest`) |
 | `BASE_PATH=/study-practice-repo npm run build` | Local build matching the deployed URL prefix |
 | `npx getdesign@latest add <name>` | Install a DESIGN.md (from getdesign.md) |

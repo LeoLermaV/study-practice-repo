@@ -1,105 +1,78 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import MiniSearch from 'minisearch'
+import MiniSearch, { type Options } from 'minisearch'
+import { searchIndexOptions } from '@/lib/content/search'
 import type { TopicMeta, Category } from '@/lib/content/types'
 import { assetPath } from '@/lib/utils'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Search as SearchIcon, BookOpen, BookText, Code2, Cpu, Users, Clock } from 'lucide-react'
+import { categoryColor, categoryShortTitles, isListedTopic } from '@/lib/content/sections'
+import { Search as SearchIcon } from 'lucide-react'
 
-const categoryIcons: Record<Category, React.ReactNode> = {
-  'system-design': <BookOpen className="h-4 w-4" />,
-  'dsa': <Code2 className="h-4 w-4" />,
-  'cs-fundamentals': <Cpu className="h-4 w-4" />,
-  'behavioral': <Users className="h-4 w-4" />,
-  'ddia': <BookText className="h-4 w-4" />,
-}
+type Hit = Pick<TopicMeta, 'slug' | 'title' | 'category' | 'difficulty' | 'estimatedReadingTime'>
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<TopicMeta[]>([])
-  const [loading, setLoading] = useState(true)
+  const [index, setIndex] = useState<MiniSearch<Hit> | null>(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     fetch(assetPath('/search-index.json'))
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.documents) {
-          const miniSearch = MiniSearch.loadJSON(JSON.stringify(data), {
-            fields: ['title', 'tags'],
-            storeFields: ['slug', 'title', 'category', 'difficulty', 'tags'],
-          })
-          if (query) {
-            setResults(miniSearch.search(query, { prefix: true, fuzzy: 0.2 }) as unknown as TopicMeta[])
-          }
-        }
-        setLoading(false)
+      .then((r) => r.text())
+      .then((json) => {
+        if (cancelled) return
+        setIndex(MiniSearch.loadJSON<Hit>(json, searchIndexOptions as Options<Hit>))
       })
+      .catch(() => { if (!cancelled) setFailed(true) })
+    return () => { cancelled = true }
   }, [])
 
-  const handleSearch = useCallback((value: string) => {
-    setQuery(value)
-    fetch(assetPath('/search-index.json'))
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data?.documents) return
-        const miniSearch = MiniSearch.loadJSON(JSON.stringify(data), {
-          fields: ['title', 'tags'],
-          storeFields: ['slug', 'title', 'category', 'difficulty', 'tags'],
-        })
-        if (value) {
-          setResults(miniSearch.search(value, { prefix: true, fuzzy: 0.2 }) as unknown as TopicMeta[])
-        } else {
-          setResults([])
-        }
-      })
-  }, [])
+  const results = useMemo(() => {
+    const q = query.trim()
+    if (!index || !q) return []
+    return (index.search(q) as unknown as Hit[]).filter((h) => isListedTopic(h.slug))
+  }, [index, query])
 
   return (
-    <div className="max-w-3xl mx-auto animate-fade-in">
-      <h1 className="text-4xl font-bold mb-6 tracking-tight">Search</h1>
-      <div className="relative mb-6">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search topics..."
+    <div className="mx-auto max-w-[680px] animate-fade-in">
+      <h1 className="mb-5 text-[26px] font-semibold tracking-[-0.02em] md:text-[28px]">Search</h1>
+      <label className="mb-5 flex h-11 items-center gap-2.5 rounded-lg border border-border bg-card px-3 text-ink-faint focus-within:border-brand">
+        <SearchIcon className="size-4 shrink-0" />
+        <input
+          id="search-page-input"
+          type="search"
+          placeholder="Search all topics"
           value={query}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="pl-9"
+          onChange={(e) => setQuery(e.target.value)}
           autoFocus
+          autoComplete="off"
+          className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-ink-faint"
         />
-      </div>
+      </label>
 
-      {loading && <p className="text-sm text-muted-foreground">Loading search index...</p>}
+      {!index && !failed && <p className="text-sm text-muted-foreground">Loading search index…</p>}
+      {failed && <p className="text-sm text-destructive">The search index could not be loaded. Reload the page to try again.</p>}
 
-      <div className="grid gap-2">
+      <ul className="border-t border-border empty:border-t-0">
         {results.map((topic) => (
-          <Link key={`${topic.category}-${topic.slug}`} href={`/${topic.category}/${topic.slug}`}>
-            <Card className="transition-colors duration-200 hover:bg-secondary hover:-translate-y-0.5">
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className="text-muted-foreground">
-                  {categoryIcons[topic.category as Category]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{topic.title}</p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="capitalize">{topic.category}</span>
-                    <span>·</span>
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 rounded-full">{topic.difficulty}</Badge>
-                    <span>·</span>
-                    <span>{topic.estimatedReadingTime} min</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+          <li key={`${topic.category}-${topic.slug}`} className="border-b border-border">
+            <Link href={`/${topic.category}/${topic.slug}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-1 py-3 transition-colors hover:bg-secondary">
+              <span className="size-2 rounded-full" style={{ backgroundColor: categoryColor(topic.category) }} aria-hidden />
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-medium">{topic.title}</span>
+                <span className="text-[12.5px] text-muted-foreground">
+                  {categoryShortTitles[topic.category as Category]} · <span className="capitalize">{topic.difficulty}</span>
+                </span>
+              </span>
+              <span className="font-mono text-xs text-ink-faint tabular-nums">{topic.estimatedReadingTime} min</span>
+            </Link>
+          </li>
         ))}
-        {query && !loading && results.length === 0 && (
-          <p className="text-sm text-muted-foreground">No results found for &ldquo;{query}&rdquo;</p>
-        )}
-      </div>
+      </ul>
+      {query.trim() && index && results.length === 0 && (
+        <p className="text-sm text-muted-foreground">No topics match &ldquo;{query.trim()}&rdquo;.</p>
+      )}
     </div>
   )
 }

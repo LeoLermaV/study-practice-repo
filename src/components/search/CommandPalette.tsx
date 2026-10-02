@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CommandDialog,
@@ -10,29 +10,47 @@ import {
   CommandGroup,
   CommandItem,
 } from '@/components/ui/command'
-import type { TopicMeta } from '@/lib/content/types'
-import { assetPath } from '@/lib/utils'
-import { BookOpen, BookText, Code2, Cpu, Users } from 'lucide-react'
+import { categoryColor, categoryOrder, categoryShortTitles, isListedTopic } from '@/lib/content/sections'
+import { matchTopic } from '@/lib/content/matchTopic'
+import { loadSearchData, lookupHref, type LookupTopic, type SearchData } from '@/lib/content/topicLookup'
+import { onOpenSearch } from './openSearch'
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  'system-design': <BookOpen className="h-4 w-4" />,
-  dsa: <Code2 className="h-4 w-4" />,
-  'cs-fundamentals': <Cpu className="h-4 w-4" />,
-  behavioral: <Users className="h-4 w-4" />,
-  ddia: <BookText className="h-4 w-4" />,
+const MAX_TITLE_HITS = 40
+const MAX_HEADING_HITS = 12
+
+interface Results {
+  byTitle: LookupTopic[]
+  byHeading: LookupTopic[]
 }
 
-const categoryNames: Record<string, string> = {
-  'system-design': 'System Design',
-  dsa: 'DS&A',
-  'cs-fundamentals': 'CS Fundamentals',
-  behavioral: 'Behavioral',
-  ddia: 'DDIA',
+/**
+ * Title and tag matches first (every word must match, word starts rank
+ * highest), then topics that only mention the words in a section heading,
+ * so "quorum" finds the DDIA sections that explain quorums.
+ */
+function search(data: SearchData, topics: LookupTopic[], query: string): Results {
+  const byTitle = topics
+    .map((t) => ({ t, score: matchTopic(t.title, t.tags ?? [], query) }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score || a.t.title.localeCompare(b.t.title))
+    .slice(0, MAX_TITLE_HITS)
+    .map((r) => r.t)
+  const seen = new Set(byTitle.map((t) => t.slug))
+  const byHeading: LookupTopic[] = []
+  for (const hit of data.index.search(query, { fields: ['headings'], combineWith: 'AND', prefix: true, fuzzy: 0.15 })) {
+    const t = data.lookup.get(String(hit.id))
+    if (!t || seen.has(t.slug) || !isListedTopic(t.slug)) continue
+    seen.add(t.slug)
+    byHeading.push(t)
+    if (byHeading.length >= MAX_HEADING_HITS) break
+  }
+  return { byTitle, byHeading }
 }
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
-  const [topics, setTopics] = useState<TopicMeta[]>([])
+  const [query, setQuery] = useState('')
+  const [data, setData] = useState<SearchData | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -43,47 +61,68 @@ export function CommandPalette() {
       }
     }
     document.addEventListener('keydown', down)
-    return () => document.removeEventListener('keydown', down)
+    const off = onOpenSearch(() => setOpen(true))
+    return () => {
+      document.removeEventListener('keydown', down)
+      off()
+    }
   }, [])
 
   useEffect(() => {
-    fetch(assetPath('/search-index.json'))
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.documents) setTopics(data.documents as TopicMeta[])
-      })
-      .catch(() => setTopics([]))
+    loadSearchData().then(setData).catch(() => setData(null))
   }, [])
 
-  const grouped = topics.reduce<Record<string, TopicMeta[]>>((acc, t) => {
-    if (!acc[t.category]) acc[t.category] = []
-    acc[t.category].push(t)
-    return acc
-  }, {})
+  const topics = useMemo(() => (data ? [...data.lookup.values()].filter((t) => isListedTopic(t.slug)) : []), [data])
+  const q = query.trim()
+  const results = useMemo(() => (data && q ? search(data, topics, q) : null), [data, topics, q])
+
+  const go = (t: LookupTopic) => {
+    setOpen(false)
+    setQuery('')
+    router.push(lookupHref(t))
+  }
+
+  const item = (t: LookupTopic, showCategory: boolean) => (
+    <CommandItem key={t.slug} value={t.slug} onSelect={() => go(t)}>
+      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(t.category) }} aria-hidden />
+      <span className="flex-1 truncate">{t.title}</span>
+      {showCategory && <span className="shrink-0 text-xs text-ink-faint">{categoryShortTitles[t.category]}</span>}
+      {!showCategory && t.estimatedReadingTime !== undefined && (
+        <span className="shrink-0 font-mono text-xs text-ink-faint tabular-nums">{t.estimatedReadingTime} min</span>
+      )}
+    </CommandItem>
+  )
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search 432 topics..." />
+    <CommandDialog
+      open={open}
+      onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }}
+      shouldFilter={false}
+      title="Search topics"
+      description="Search all topics by title, tag or section heading"
+    >
+      <CommandInput placeholder="Search all topics" value={query} onValueChange={setQuery} />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        {Object.entries(grouped).map(([cat, catTopics]) => (
-          <CommandGroup key={cat} heading={categoryNames[cat] ?? cat}>
-            {catTopics.map((topic) => (
-              <CommandItem
-                key={topic.slug}
-                value={`${topic.title} ${topic.tags.join(' ')}`}
-                onSelect={() => {
-                  setOpen(false)
-                  router.push(`/${topic.category}/${topic.slug}`)
-                }}
-              >
-                <span className="text-muted-foreground shrink-0">{categoryIcons[topic.category] ?? null}</span>
-                <span className="flex-1 truncate">{topic.title}</span>
-                <span className="text-xs text-ink-faint shrink-0">{topic.estimatedReadingTime}m</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
+        <CommandEmpty>{data ? 'No topics match.' : 'Loading topics…'}</CommandEmpty>
+        {results ? (
+          <>
+            {results.byTitle.length > 0 && (
+              <CommandGroup heading="Topics">{results.byTitle.map((t) => item(t, true))}</CommandGroup>
+            )}
+            {results.byHeading.length > 0 && (
+              <CommandGroup heading="In section headings">{results.byHeading.map((t) => item(t, true))}</CommandGroup>
+            )}
+          </>
+        ) : (
+          categoryOrder.map((cat) => {
+            const list = topics.filter((t) => t.category === cat)
+            return list.length > 0 ? (
+              <CommandGroup key={cat} heading={categoryShortTitles[cat]}>
+                {list.map((t) => item(t, false))}
+              </CommandGroup>
+            ) : null
+          })
+        )}
       </CommandList>
     </CommandDialog>
   )

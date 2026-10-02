@@ -1,9 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import { execSync } from 'child_process'
 import type { TopicMeta } from '../src/lib/content/types'
 import type { SourceAdapter } from './adapters/base'
 import { createSearchIndex } from '../src/lib/content/search'
+import { extractHeadings } from '../src/lib/content/headings'
+import { prepareMarkdown, usesInlineDollarMath } from '../src/lib/content/markdown'
+import { syncSource } from './git-source'
 import { buildTopicGraph } from '../src/lib/content/topics'
 
 const cacheDir = path.join(process.cwd(), '.cache', 'repos')
@@ -15,16 +17,7 @@ function ensureDir(dir: string) {
 
 function cloneRepo(adapter: SourceAdapter) {
   const target = path.join(cacheDir, adapter.name)
-  if (fs.existsSync(target)) {
-    try {
-      execSync(`git -C "${target}" pull --depth 1`, { stdio: 'pipe' })
-    } catch {
-      // ignore pull failures
-    }
-  } else {
-    ensureDir(path.dirname(target))
-    execSync(`git clone --depth 1 "${adapter.cloneUrl}" "${target}"`, { stdio: 'pipe' })
-  }
+  syncSource(adapter.name, adapter.cloneUrl, target)
   return target
 }
 
@@ -40,12 +33,12 @@ async function ingestAdapter(adapter: SourceAdapter) {
 
     const body = await adapter.content(topic.slug)
     const bodyWithCode = convertIndentedCodeBlocks(body)
-    const escaped = escapeBraces(bodyWithCode)
+    const escaped = prepareMarkdown(bodyWithCode, usesInlineDollarMath(topic.slug))
     const mdx = `---\n${JSON.stringify(topic, null, 2)}\n---\n\n${escaped}`
     fs.writeFileSync(path.join(categoryDir, `${topic.slug}.mdx`), mdx)
 
-    const meta = { ...topic }
-    delete (meta as any).sourceRepos
+    const meta: Partial<TopicMeta> = { ...topic }
+    delete meta.sourceRepos
     fs.writeFileSync(
       path.join(categoryDir, `${topic.slug}.json`),
       JSON.stringify(meta, null, 2)
@@ -131,14 +124,28 @@ function convertIndentedCodeBlocks(body: string): string {
   return result.join('\n')
 }
 
-function escapeBraces(body: string): string {
-  const parts = body.split(/(```[\s\S]*?```)/)
-  return parts
-    .map((part, i) => {
-      if (i % 2 === 1) return part
-      return part.replace(/(?<!\\){/g, '\\{').replace(/(?<!\\)}/g, '\\}')
-    })
-    .join('')
+/**
+ * Progress is stored by slug, so a slug that disappears (an upstream rename)
+ * orphans whatever was studied under it. Compares with the previous local
+ * index so a pin bump shows exactly what moved.
+ */
+function reportRemovedSlugs(slugs: string[]) {
+  const previousFile = path.join(process.cwd(), 'public', 'search-index.json')
+  if (!fs.existsSync(previousFile)) return
+  try {
+    const previous = JSON.parse(fs.readFileSync(previousFile, 'utf-8')) as { storedFields?: Record<string, { slug?: string }> }
+    const before = new Set(Object.values(previous.storedFields ?? {}).map((d) => d.slug).filter((s): s is string => Boolean(s)))
+    const now = new Set(slugs)
+    const removed = [...before].filter((s) => !now.has(s)).sort()
+    const added = [...now].filter((s) => !before.has(s)).length
+    if (removed.length > 0) {
+      console.warn(`\n  ! ${removed.length} topic slug(s) no longer exist. Progress stored under them will show as missing:`)
+      for (const s of removed) console.warn(`    - ${s}`)
+    }
+    if (removed.length > 0 || added > 0) console.log(`  Slugs: ${added} added, ${removed.length} removed since the last ingest`)
+  } catch {
+    // An unreadable previous index just means nothing to compare with.
+  }
 }
 
 async function main() {
@@ -175,7 +182,14 @@ async function main() {
   const topics = getAllTopics()
   console.log(`  Total topics: ${topics.length}`)
 
-  const searchIndex = createSearchIndex(topics)
+  // Section headings make topics findable by what they cover, not only their title.
+  const documents = topics.map((t) => {
+    const file = path.join(contentDir, t.category, `${t.slug}.mdx`)
+    const body = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : ''
+    return { ...t, headings: extractHeadings(body).join(' · ') }
+  })
+  reportRemovedSlugs(topics.map((t) => t.slug))
+  const searchIndex = createSearchIndex(documents)
   ensureDir(path.join(process.cwd(), 'public'))
   fs.writeFileSync(
     path.join(process.cwd(), 'public', 'search-index.json'),

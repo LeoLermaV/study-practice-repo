@@ -2,16 +2,21 @@ import fs from 'fs'
 import path from 'path'
 import { compileMDX } from 'next-mdx-remote/rsc'
 import Link from 'next/link'
-import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
-import { readTopicMeta, getTopicFiles } from '@/lib/content/fs'
-import type { TopicMeta, Category } from '@/lib/content/types'
-import { TopicHeader } from '@/components/topic/TopicHeader'
-import { AIPracticeButton } from '@/components/topic/AIPracticeButton'
-import { ProgressToggles } from '@/components/progress/ProgressToggles'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import remarkGfm from 'remark-gfm'
-import { sectionsByCategory, categoryTitles } from '@/lib/content/sections'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
+import { readTopicMeta } from '@/lib/content/fs'
+import { findTopic, placeTopic, type TopicRef } from '@/lib/content/library'
+import { categoryColor, categoryShortTitles } from '@/lib/content/sections'
+import type { TopicMeta, Category } from '@/lib/content/types'
+import { AIPracticeButton } from '@/components/topic/AIPracticeButton'
+import { OutlineDisclosure, OutlineRail } from '@/components/topic/Outline'
+import { remarkOutline, type OutlineItem } from '@/lib/content/outline'
+import { usesInlineDollarMath } from '@/lib/content/markdown'
+import { RecordVisit } from '@/lib/recent'
+import { DueNotes, ReviewPanel, ReviewStatus } from '@/components/progress/ReviewPanel'
 
 const supplementMap: Record<string, string[]> = {
   'load-balancing': ['donnemartin-load-balancer'],
@@ -41,6 +46,20 @@ interface TopicPageProps {
   slug: string
 }
 
+function resolve(slugs: string[], exclude: string): TopicRef[] {
+  const seen = new Set<string>([exclude])
+  const out: TopicRef[] = []
+  for (const s of slugs) {
+    if (seen.has(s)) continue
+    seen.add(s)
+    const ref = findTopic(s)
+    if (ref) out.push(ref)
+  }
+  return out
+}
+
+const refHref = (r: TopicRef) => `/${r.category}/${r.slug}`
+
 export async function TopicPageContent({ category, slug }: TopicPageProps) {
   const meta = readTopicMeta(category, slug) as TopicMeta | null
   if (!meta) return <div>Topic not found</div>
@@ -53,154 +72,150 @@ export async function TopicPageContent({ category, slug }: TopicPageProps) {
 
   body = body.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 
-  const orderedSlugs = buildOrderedSlugs(category)
-  const currentIdx = orderedSlugs.indexOf(slug)
-  const prev = currentIdx > 0 ? { slug: orderedSlugs[currentIdx - 1] } : null
-  const next = currentIdx < orderedSlugs.length - 1 ? { slug: orderedSlugs[currentIdx + 1] } : null
+  const { content, outline } = await compileTopic(slug, body)
+  const placement = placeTopic(category, slug)
+  const prerequisites = resolve(meta.prerequisites, slug)
+  const related = resolve(meta.relatedTopics, slug).filter((r) => !prerequisites.some((p) => p.slug === r.slug))
+  // Quick Reference pages are themselves donnemartin theory; don't nest references inside them.
+  const supplements = meta.prerequisites[0]?.startsWith('donnemartin-') ? [] : resolve(supplementMap[slug] ?? [], slug)
 
   return (
-    <article className="max-w-[680px] mx-auto animate-fade-in">
-      <div className="mb-6">
-        <Link
-          href={`/${category}`}
-          className="inline-flex min-h-8 items-center gap-1.5 -ml-1 pr-2 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          {categoryTitles[category] ?? category}
+    <article className="relative mx-auto max-w-[680px] animate-fade-in">
+      <RecordVisit slug={slug} />
+      <OutlineRail items={outline} />
+      <nav aria-label="Breadcrumb" className="mb-5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-muted-foreground">
+        <Link href="/" className="hover:text-foreground">Library</Link>
+        <span aria-hidden className="text-ink-faint">/</span>
+        <Link href={`/${category}`} className="flex items-center gap-1.5 hover:text-foreground">
+          <span className="size-1.5 rounded-full" style={{ backgroundColor: categoryColor(category) }} aria-hidden />
+          {categoryShortTitles[category]}
         </Link>
-      </div>
+        {placement.sectionLabel && placement.sectionId && (
+          <>
+            <span aria-hidden className="text-ink-faint">/</span>
+            <Link href={`/${category}#${placement.sectionId}`} className="hover:text-foreground">
+              {placement.sectionLabel}
+            </Link>
+          </>
+        )}
+      </nav>
 
-      <header className="mb-8 flex flex-col gap-5">
-        <TopicHeader
-          title={meta.title}
-          difficulty={meta.difficulty}
-          estimatedReadingTime={meta.estimatedReadingTime}
-          tags={meta.tags}
-        />
-        <ProgressToggles slug={slug} />
-        <AIPracticeButton topicTitle={meta.title} topicContent={body} />
+      <header className="mb-9 border-b border-border pb-6">
+        <h1 className="text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-balance md:text-[34px]">
+          {meta.title}
+        </h1>
+        <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground">
+          <ReviewStatus slug={slug} />
+          <span className="tabular-nums">{meta.estimatedReadingTime} min read</span>
+          <span className="capitalize">{meta.difficulty}</span>
+          <span className="sm:ml-auto">
+            <AIPracticeButton topicTitle={meta.title} topicContent={body} />
+          </span>
+        </div>
+        {prerequisites.length > 0 && (
+          <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
+            <span className="text-ink-faint">Before this: </span>
+            {prerequisites.map((p, i) => (
+              <span key={p.slug}>
+                {i > 0 && ', '}
+                <Link href={refHref(p)} className="text-foreground underline decoration-border-strong underline-offset-[3px] hover:decoration-foreground">
+                  {p.title}
+                </Link>
+              </span>
+            ))}
+          </p>
+        )}
+        <DueNotes slug={slug} />
       </header>
 
-      {meta.prerequisites.length > 0 && (
-        <div className="mb-4 rounded-xl border border-border/60 bg-card/60 px-4 py-3.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Prerequisites</span>
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
-            {meta.prerequisites.map((p) => (
-              <Badge key={p} variant="secondary" className="text-xs rounded-full capitalize hover:bg-accent transition-colors duration-200 max-w-full h-auto whitespace-normal text-left">
-                <Link href={`/${category}/${p}`}>{p.replace(/-/g, ' ')}</Link>
-              </Badge>
+      <OutlineDisclosure items={outline} />
+
+      <div className="topic-content max-w-none">{content}</div>
+
+      {supplements.length > 0 && (
+        <aside className="mt-10 rounded-xl border border-border p-4">
+          <h2 className="text-[13px] font-medium">Quick reference</h2>
+          <p className="mb-2 mt-0.5 text-[13px] text-muted-foreground">Related references and Python patterns for this topic.</p>
+          <ul>
+            {supplements.map((t) => (
+              <li key={t.slug}>
+                <Link href={refHref(t)} className="-mx-2 flex min-h-10 items-center justify-between gap-3 rounded-lg px-2 py-2 text-[14px] transition-colors hover:bg-secondary">
+                  <span>{t.title}</span>
+                  <span className="shrink-0 font-mono text-xs text-ink-faint tabular-nums">{t.minutes} min</span>
+                </Link>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </aside>
       )}
 
-      {meta.relatedTopics.length > 0 && (
-        <div className="mb-4 rounded-xl border border-border/60 bg-card/60 px-4 py-3.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Related</span>
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
-            {meta.relatedTopics.map((r) => (
-              <Badge key={r} variant="outline" className="text-xs rounded-full capitalize hover:bg-secondary transition-colors duration-200 max-w-full h-auto whitespace-normal text-left">
-                <Link href={`/${category}/${r}`}>{r.replace(/-/g, ' ')}</Link>
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <Separator className="mt-8 mb-10 bg-border/60" />
-
-      <div className="topic-content max-w-none">
-        <MDXBody slug={slug} source={body} />
+      <div className="mt-10">
+        <ReviewPanel key={slug} slug={slug} title={meta.title} />
       </div>
 
-      {meta.prerequisites.length > 0 && meta.prerequisites[0].startsWith('donnemartin-') ? null : (
-        (() => {
-          const suppSlugs = supplementMap[slug]
-          if (!suppSlugs) return null
-          const suppTopics = suppSlugs
-            .map((s) => readTopicMeta<TopicMeta & { slug: string }>(category, s))
-            .filter((t): t is TopicMeta & { slug: string } => t !== null)
-          if (suppTopics.length === 0) return null
-          return (
-            <div className="mt-10 p-5 rounded-xl bg-card/60 border border-border/60">
-              <div className="flex items-center gap-2 mb-1.5">
-                <BookOpen className="h-4 w-4 text-brand" />
-                <span className="text-sm font-semibold">Quick Reference</span>
-              </div>
-              <p className="text-[13px] text-muted-foreground mb-3">
-                Related references and Python patterns for this topic.
-              </p>
-              <div className="grid gap-1">
-                {suppTopics.map((t) => (
-                  <Link
-                    key={t.slug}
-                    href={`/${category}/${t.slug}`}
-                    className="flex min-h-11 items-center justify-between gap-3 -mx-2 px-3 py-2.5 rounded-lg hover:bg-secondary/70 transition-colors duration-200"
-                  >
-                    <span className="text-sm font-medium">{t.title}</span>
-                    <span className="text-xs text-ink-faint tabular-nums shrink-0">{t.estimatedReadingTime} min</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )
-        })()
+      {related.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-2 text-[13px] font-medium text-muted-foreground">Related topics</h2>
+          <ul>
+            {related.map((r) => (
+              <li key={r.slug}>
+                <Link href={refHref(r)} className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-2 text-[14px] transition-colors hover:bg-secondary">
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(r.category) }} aria-hidden />
+                  <span className="truncate">{r.title}</span>
+                  {r.category !== category && (
+                    <span className="ml-auto shrink-0 text-xs text-ink-faint">{categoryShortTitles[r.category]}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      <div className="mt-10 mb-10">
-        <ProgressToggles slug={slug} />
-      </div>
-
-      <Separator className="my-10 bg-border/60" />
-
-      <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2">
-        {prev ? (
-          <Link
-            href={`/${category}/${prev.slug}`}
-            className="group flex flex-col gap-1 rounded-xl border border-border/60 bg-card/60 p-4 hover:bg-card hover:border-border transition-colors duration-200"
-          >
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
-              <ChevronLeft className="h-3 w-3" />
+      <nav aria-label="Previous and next topic" className="mt-10 grid grid-cols-2 gap-3 border-t border-border pt-6">
+        {placement.prev ? (
+          <Link href={refHref(placement.prev)} className="group min-w-0 rounded-xl border border-border p-3.5 transition-colors hover:border-border-strong">
+            <span className="flex items-center gap-1 text-xs text-ink-faint">
+              <ChevronLeft className="size-3" aria-hidden />
               Previous
             </span>
-            <span className="text-sm font-medium capitalize text-muted-foreground group-hover:text-foreground transition-colors duration-200">
-              {prev.slug.replace(/-/g, ' ')}
-            </span>
+            <span className="mt-0.5 block truncate text-[14px] font-medium">{placement.prev.title}</span>
           </Link>
-        ) : <div className="hidden sm:block" />}
-        {next ? (
-          <Link
-            href={`/${category}/${next.slug}`}
-            className="group flex flex-col gap-1 items-end text-right rounded-xl border border-border/60 bg-card/60 p-4 hover:bg-card hover:border-border transition-colors duration-200"
-          >
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+        ) : <span />}
+        {placement.next ? (
+          <Link href={refHref(placement.next)} className="group min-w-0 rounded-xl border border-border p-3.5 text-right transition-colors hover:border-border-strong">
+            <span className="flex items-center justify-end gap-1 text-xs text-ink-faint">
               Next
-              <ChevronRight className="h-3 w-3" />
+              <ChevronRight className="size-3" aria-hidden />
             </span>
-            <span className="text-sm font-medium capitalize text-muted-foreground group-hover:text-foreground transition-colors duration-200">
-              {next.slug.replace(/-/g, ' ')}
-            </span>
+            <span className="mt-0.5 block truncate text-[14px] font-medium">{placement.next.title}</span>
           </Link>
-        ) : <div className="hidden sm:block" />}
+        ) : <span />}
       </nav>
     </article>
   )
 }
 
-const mdxCache = new Map<string, React.ReactNode>()
+const compiled = new Map<string, { content: React.ReactNode; outline: OutlineItem[] }>()
 
-async function MDXBody({ slug, source }: { slug: string; source: string }) {
-  const cached = mdxCache.get(slug)
-  if (cached !== undefined) return <>{cached}</>
+async function compileTopic(slug: string, source: string): Promise<{ content: React.ReactNode; outline: OutlineItem[] }> {
+  const cached = compiled.get(slug)
+  if (cached) return cached
 
+  const outline: OutlineItem[] = []
   const { content } = await compileMDX({
     source,
     options: {
       parseFrontmatter: false,
-      mdxOptions: { remarkPlugins: [remarkGfm], format: 'md' },
+      mdxOptions: {
+        remarkPlugins: [remarkGfm, [remarkMath, { singleDollarTextMath: usesInlineDollarMath(slug) }], remarkOutline(outline)],
+        // Bad LaTeX renders as a red error in place instead of failing the build.
+        rehypePlugins: [[rehypeKatex, { throwOnError: false, strict: false }]],
+        format: 'md',
+      },
     },
     components: {
-      a: (props: any) => {
+      a: (props: React.ComponentProps<'a'>) => {
         const href = props.href || ''
         if (href.startsWith('http')) {
           return <a {...props} target="_blank" rel="noopener noreferrer" />
@@ -209,54 +224,7 @@ async function MDXBody({ slug, source }: { slug: string; source: string }) {
       },
     },
   })
-  mdxCache.set(slug, content)
-  return <>{content}</>
-}
-
-function buildOrderedSlugs(category: string): string[] {
-  const sections = sectionsByCategory[category]
-  if (!sections) {
-    return getTopicFiles(category).map((f) => f.slug).sort()
-  }
-
-  const allFiles = getTopicFiles(category)
-  const allSlugs = new Set(allFiles.map((f) => f.slug))
-  const ordered: string[] = []
-  const seen = new Set<string>()
-
-  for (const section of sections) {
-    if (section.slugPrefix) {
-      const prefix = section.slugPrefix
-      const matched = allFiles
-        .filter((f) => f.slug.startsWith(prefix))
-        .map((f) => ({ file: f, meta: readTopicMeta(category, f.slug) as TopicMeta | null }))
-        .filter(({ meta }) => meta != null && !meta.tags.includes('chapter-summary'))
-        .sort((a, b) => {
-          const aOrder = a.meta?.sortOrder ?? 999
-          const bOrder = b.meta?.sortOrder ?? 999
-          if (aOrder !== bOrder) return aOrder - bOrder
-          return a.file.slug.localeCompare(b.file.slug)
-        })
-      for (const { file } of matched) {
-        if (!seen.has(file.slug)) {
-          ordered.push(file.slug)
-          seen.add(file.slug)
-        }
-      }
-    } else {
-      for (const s of section.slugs) {
-        if (allSlugs.has(s) && !seen.has(s)) {
-          ordered.push(s)
-          seen.add(s)
-        }
-      }
-    }
-  }
-
-  for (const f of allFiles) {
-    if (!seen.has(f.slug)) ordered.push(f.slug)
-    seen.add(f.slug)
-  }
-
-  return ordered
+  const result = { content, outline }
+  compiled.set(slug, result)
+  return result
 }

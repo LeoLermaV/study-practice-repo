@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { execSync } from 'child_process'
+import { syncSource } from '../git-source'
 import type { TopicMeta, Difficulty } from '../../src/lib/content/types'
 import type { SourceAdapter } from './base'
 
@@ -280,15 +280,8 @@ export class DDIAAdapter implements SourceAdapter {
   private refsDir = path.join(process.cwd(), '.cache', 'repos', 'ept-ddia-references')
   private referencesUrl = 'https://github.com/ept/ddia-references'
 
-  private ensureDir(dir: string) {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  }
-
   private async ensureReferences() {
-    if (!fs.existsSync(this.refsDir)) {
-      this.ensureDir(path.dirname(this.refsDir))
-      execSync(`git clone --depth 1 "${this.referencesUrl}" "${this.refsDir}"`, { stdio: 'pipe' })
-    }
+    syncSource('ept-ddia-references', this.referencesUrl, this.refsDir)
     this.parseReferences()
   }
 
@@ -333,9 +326,10 @@ export class DDIAAdapter implements SourceAdapter {
         prerequisites: chapter.number > 1 ? [chapterSlug(chapter.number - 1)] : ['what-is-system-design'],
         relatedTopics: [...(RELATED_EXISTING_SLUGS[chapter.number] ?? [])],
         sourceRepos: [this.name],
+        sortOrder: 0,
       })
 
-      for (const section of chapter.sections) {
+      for (const [index, section] of chapter.sections.entries()) {
         const secSlug = sectionSlug(chapter.number, section)
         topics.push({
           slug: secSlug,
@@ -347,6 +341,8 @@ export class DDIAAdapter implements SourceAdapter {
           prerequisites: [chSlug],
           relatedTopics: [...(RELATED_EXISTING_SLUGS[chapter.number] ?? [])],
           sourceRepos: [this.name],
+          // Book order within the chapter; the overview (0) leads.
+          sortOrder: index + 1,
         })
       }
     }

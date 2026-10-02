@@ -6,8 +6,8 @@ import { get } from 'idb-keyval'
 import { getStudyStats, getAllProgress } from '@/lib/progress/db'
 import type { StudyStats, ProgressEntry, TopicMeta, Category } from '@/lib/content/types'
 import { assetPath } from '@/lib/utils'
+import { categoryColor, categoryOrder, categoryShortTitles } from '@/lib/content/sections'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Flame, BookOpen, TrendingUp, RefreshCw } from 'lucide-react'
 
 const STUDY_LOG_KEY = 'study-log'
 const INITIAL_ROWS = 20
@@ -17,20 +17,12 @@ type Stage = 'read' | 'studied' | 'practiced'
 const STAGES: Stage[] = ['read', 'studied', 'practiced']
 
 const stageStyle: Record<Stage, { label: string; dot: string }> = {
-  read: { label: 'Read', dot: 'bg-brand' },
-  studied: { label: 'Studied', dot: 'bg-amber-500' },
-  practiced: { label: 'Practiced', dot: 'bg-emerald-500' },
+  read: { label: 'Read', dot: 'bg-brand/40' },
+  studied: { label: 'Studied', dot: 'bg-brand' },
+  practiced: { label: 'Rated', dot: 'bg-foreground/70' },
 }
 
-const categories: Category[] = ['system-design', 'dsa', 'ddia', 'cs-fundamentals', 'behavioral']
-
-const catNames: Record<Category, string> = {
-  'system-design': 'System Design',
-  dsa: 'DS&A',
-  ddia: 'DDIA',
-  'cs-fundamentals': 'CS Fundamentals',
-  behavioral: 'Behavioral',
-}
+const categories: Category[] = categoryOrder
 
 interface ActivityRow {
   slug: string
@@ -93,6 +85,16 @@ export default function ProgressPage() {
     return rows.sort((a, b) => b.lastTouched - a.lastTouched)
   }, [allProgress, topicIndex])
 
+  // Progress under slugs the content no longer has (an upstream rename). An empty
+  // index means the topic list failed to load, not that everything vanished.
+  const missing = useMemo(() => {
+    if (!topicIndex || topicIndex.size === 0) return []
+    return allProgress
+      .filter((e) => (e.readAt || e.studiedAt) && !topicIndex.has(e.slug))
+      .map((e) => e.slug)
+      .sort()
+  }, [allProgress, topicIndex])
+
   const filtered = useMemo(
     () => (filter === 'all' ? activity : activity.filter((r) => r.stage === filter)),
     [activity, filter]
@@ -119,7 +121,7 @@ export default function ProgressPage() {
     return acc
   }, [allProgress, topicIndex])
 
-  if (!stats) return <div className="max-w-3xl mx-auto"><p className="text-muted-foreground">Loading...</p></div>
+  if (!stats) return <div className="mx-auto max-w-3xl"><p className="text-muted-foreground">Loading…</p></div>
 
   const dueForecast: { day: number; count: number }[] = []
   for (let d = 0; d < 7; d++) {
@@ -145,19 +147,36 @@ export default function ProgressPage() {
   const visible = expanded ? filtered : filtered.slice(0, INITIAL_ROWS)
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Progress</h1>
+    <div className="mx-auto max-w-3xl animate-fade-in">
+      <h1 className="mb-6 text-[26px] font-semibold tracking-[-0.02em] md:text-[28px]">Progress</h1>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        <StatCard icon={<Flame className="h-5 w-5" />} label="Current Streak" value={`${stats.currentStreak} days`} />
-        <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Read" value={`${stats.totalRead}`} />
-        <StatCard icon={<BookOpen className="h-5 w-5" />} label="Studied" value={`${stats.totalStudied}`} />
-        <StatCard icon={<RefreshCw className="h-5 w-5" />} label="Due for Review" value={`${stats.topicsDueForReview}`} />
+      <div className="mb-8 grid grid-cols-2 gap-x-6 gap-y-5 rounded-xl border border-border bg-card p-5 md:grid-cols-4">
+        <StatCard label="day streak" value={stats.currentStreak} />
+        <StatCard label="read" value={stats.totalRead} />
+        <StatCard label="in review" value={stats.totalStudied} />
+        <StatCard label="due today" value={stats.topicsDueForReview} />
       </div>
+
+      {missing.length > 0 && (
+        <div role="status" className="mb-8 rounded-xl border border-border bg-card p-4 text-sm">
+          <p className="font-medium">
+            {missing.length} {missing.length === 1 ? 'topic' : 'topics'} in your progress no longer {missing.length === 1 ? 'exists' : 'exist'}
+          </p>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Usually the source renamed a page, which changes its address. The history is kept, but these can&apos;t be opened
+            or reviewed until the content has them again.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {missing.map((slug) => (
+              <li key={slug} className="rounded-md bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground">{slug}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-          <CardTitle className="text-lg">Recent Activity</CardTitle>
+          <CardTitle className="text-[15px] font-semibold">Recent activity</CardTitle>
           <div className="flex items-center gap-1">
             <FilterChip label="All" active={filter === 'all'} onClick={() => { setFilter('all'); setExpanded(false) }} />
             {STAGES.map((s) => (
@@ -176,7 +195,7 @@ export default function ProgressPage() {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {activity.length === 0
-                ? 'Nothing marked yet. Open a topic and mark it Read.'
+                ? 'Nothing studied yet. Open a topic and press Mark as studied at the end of the page.'
                 : `No topics marked ${stageStyle[filter as Stage].label.toLowerCase()}.`}
             </p>
           ) : (
@@ -216,7 +235,7 @@ export default function ProgressPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-lg">Study Activity (12 months)</CardTitle>
+          <CardTitle className="text-[15px] font-semibold">Study activity, last 12 months</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-1">
@@ -250,30 +269,31 @@ export default function ProgressPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-lg">Mastery by Category</CardTitle>
+          <CardTitle className="text-[15px] font-semibold">By category</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {categories.map((cat) => {
             const d = byCategory.get(cat)
             if (!d || d.total === 0) return null
-            const practicedPct = Math.round((d.practiced / d.total) * 100)
             const studiedPct = Math.round((d.studied / d.total) * 100)
             const readPct = Math.round((d.read / d.total) * 100)
             return (
               <div key={cat}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">{catNames[cat]}</span>
-                  <span className="text-xs text-ink-faint">{d.practiced}/{d.total}</span>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <span className="size-2 rounded-full" style={{ backgroundColor: categoryColor(cat) }} aria-hidden />
+                    {categoryShortTitles[cat]}
+                  </span>
+                  <span className="font-mono text-xs text-ink-faint tabular-nums">{d.studied}/{d.total} studied</span>
                 </div>
-                <div className="flex h-2 rounded-full overflow-hidden bg-secondary">
-                  <div className="bg-brand transition-all" style={{ width: `${readPct}%` }} />
-                  <div className="bg-amber-500 transition-all" style={{ width: `${Math.max(0, studiedPct - readPct)}%` }} />
-                  <div className="bg-emerald-500 transition-all" style={{ width: `${Math.max(0, practicedPct - studiedPct)}%` }} />
+                <div className="flex h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div className="bg-brand transition-all" style={{ width: `${studiedPct}%` }} />
+                  <div className="bg-brand/35 transition-all" style={{ width: `${Math.max(0, readPct - studiedPct)}%` }} />
                 </div>
-                <div className="flex gap-3 mt-1 text-[10px] text-ink-faint">
-                  <span>Read: {d.read}</span>
-                  <span>Studied: {d.studied}</span>
-                  <span>Practiced: {d.practiced}</span>
+                <div className="mt-1 flex gap-3 text-[11px] text-ink-faint">
+                  <span>Read {d.read}</span>
+                  <span>Studied {d.studied}</span>
+                  {d.practiced > 0 && <span>Rated {d.practiced}</span>}
                 </div>
               </div>
             )
@@ -283,7 +303,7 @@ export default function ProgressPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-lg">Due Forecast</CardTitle>
+          <CardTitle className="text-[15px] font-semibold">Due in the next 7 days</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
@@ -291,7 +311,7 @@ export default function ProgressPage() {
               const label = day === 0 ? 'Today' : day === 1 ? 'Tom.' : day >= 6 ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day] : `${day}d`
               return (
                 <div key={day} className="flex flex-col items-center gap-1 flex-1">
-                  <span className="text-xs font-bold text-muted-foreground">{count}</span>
+                  <span className="font-mono text-xs font-medium text-muted-foreground tabular-nums">{count}</span>
                   <div className={`w-full h-16 rounded-md ${count > 0 ? 'bg-secondary' : 'bg-card'} flex items-end`}>
                     {count > 0 && (
                       <div
@@ -324,19 +344,12 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
   )
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary">
-          {icon}
-        </div>
-        <div>
-          <p className="text-2xl font-bold">{value}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div>
+      <p className="font-mono text-[26px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</p>
+      <p className="mt-1.5 text-xs text-muted-foreground">{label}</p>
+    </div>
   )
 }
 

@@ -1,6 +1,7 @@
 import { get, set, keys as idbKeys } from 'idb-keyval'
 import type { ProgressEntry } from '../content/types'
 import { mergeEntry, mergeStudyLog, normalizeEntry } from './merge'
+import { notifyProgressChanged } from './events'
 
 const GIST_FILENAME = 'faang-study-progress.json'
 const GIST_DESCRIPTION = 'FAANG Study — progress sync'
@@ -266,6 +267,7 @@ async function applyPayload(payload: SyncPayload): Promise<void> {
     const existing: string[] = await get(STUDY_LOG_KEY) ?? []
     await set(STUDY_LOG_KEY, mergeStudyLog(existing, payload.studyLog))
   }
+  notifyProgressChanged()
 }
 
 export async function importProgress(payload: SyncPayload): Promise<void> {
